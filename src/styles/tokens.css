@@ -1,0 +1,109 @@
+/* Every color in the app is a token. Light is the default; dark is defined
+   twice: once for the system preference (unless the page forces light) and
+   once for an explicit data-theme="dark". Keep the two dark blocks identical. */
+
+:root {
+  color-scheme: light;
+
+  --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --color-bg: #f4f0e8;
+  --color-surface: #fbf9f4;
+  --color-surface-sunken: #ebe5da;
+  --color-border: #ddd4c5;
+  --color-border-strong: #b5a994;
+  --color-text: #221f1a;
+  --color-text-secondary: #4d473e;
+  --color-text-muted: #6b6357;
+  --color-accent: #26244a;
+  --color-accent-hover: #383566;
+  --color-on-accent: #fbf9f4;
+  --color-accent-soft: #e3e0ee;
+  --color-focus: #2a78d6;
+  --color-shadow: rgb(60 45 20 / 0.08);
+  --color-overlay: rgb(244 240 232 / 0.92);
+
+  --color-writing: #2a78d6;
+  --color-piano: #eb6834;
+  --color-production: #1baf7a;
+  --color-writing-tint: #e2ecf8;
+  --color-piano-tint: #fbe6dc;
+  --color-production-tint: #daf1e7;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --gutter: 16px;
+  --tap: 44px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --color-bg: #161513;
+    --color-surface: #1f1d1a;
+    --color-surface-sunken: #121110;
+    --color-border: #35322c;
+    --color-border-strong: #575147;
+    --color-text: #f1ece3;
+    --color-text-secondary: #c9c1b3;
+    --color-text-muted: #a1998b;
+    --color-accent: #dcd8f6;
+    --color-accent-hover: #c8c3ef;
+    --color-on-accent: #1b1a33;
+    --color-accent-soft: #2a2840;
+    --color-focus: #3987e5;
+    --color-shadow: rgb(0 0 0 / 0.35);
+    --color-overlay: rgb(22 21 19 / 0.92);
+
+    --color-writing: #3987e5;
+    --color-piano: #d95926;
+    --color-production: #199e70;
+    --color-writing-tint: #1b2b40;
+    --color-piano-tint: #3a2319;
+    --color-production-tint: #15302a;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-bg: #161513;
+  --color-surface: #1f1d1a;
+  --color-surface-sunken: #121110;
+  --color-border: #35322c;
+  --color-border-strong: #575147;
+  --color-text: #f1ece3;
+  --color-text-secondary: #c9c1b3;
+  --color-text-muted: #a1998b;
+  --color-accent: #dcd8f6;
+  --color-accent-hover: #c8c3ef;
+  --color-on-accent: #1b1a33;
+  --color-accent-soft: #2a2840;
+  --color-focus: #3987e5;
+  --color-shadow: rgb(0 0 0 / 0.35);
+  --color-overlay: rgb(22 21 19 / 0.92);
+
+  --color-writing: #3987e5;
+  --color-piano: #d95926;
+  --color-production: #199e70;
+  --color-writing-tint: #1b2b40;
+  --color-piano-tint: #3a2319;
+  --color-production-tint: #15302a;
+}
+
+/* Each stream class sets local tokens the components read. */
+.stream-writing {
+  --stream: var(--color-writing);
+  --stream-tint: var(--color-writing-tint);
+}
+.stream-piano {
+  --stream: var(--color-piano);
+  --stream-tint: var(--color-piano-tint);
+}
+.stream-production {
+  --stream: var(--color-production);
+  --stream-tint: var(--color-production-tint);
+}
