@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { buildJsonExport, buildMarkdownExport, exportFileName, type ExportInput } from "../domain/export";
 import { parseTime } from "../domain/nudge";
 import { MAX_FLOOR, MIN_FLOOR, SEASON_LABELS, type Season } from "../domain/types";
 import { nudgePermission, requestNudgePermission, type NudgePermission } from "../lib/notify";
-import { setFloor, setNudgeTime, setSeason } from "../state/actions";
+import { now } from "../lib/clock";
+import { reloadApp } from "../lib/reload";
+import { resetAllData, setFloor, setNudgeTime, setSeason } from "../state/actions";
 import type { AppState } from "../state/useAppStore";
 
 const SEASONS: Season[] = ["normal", "travel", "newborn"];
@@ -15,7 +18,7 @@ const SEASON_NOTES: Record<Season, string> = {
     "The draw becomes an offer, Pass goes away, and these weeks never break a streak. Do what you can, and that is plenty.",
 };
 
-export function Settings({ state }: { state: AppState }) {
+export function Settings({ state, today }: { state: AppState; today: string }) {
   const { settings } = state;
   if (!settings) return null;
 
@@ -65,6 +68,10 @@ export function Settings({ state }: { state: AppState }) {
       </section>
 
       <NudgeSettings nudgeTime={settings.nudgeTime} />
+
+      <ExportSettings state={state} today={today} />
+
+      <ResetSettings />
     </main>
   );
 }
@@ -164,4 +171,111 @@ function nudgeStatus(time: string | undefined, permission: NudgePermission): str
     return `Saved for ${time}. Notifications are off for this app in your browser settings, so the nudge stays quiet until you allow them there.`;
   }
   return `Saved for ${time}. Allow notifications when your browser asks.`;
+}
+
+interface ExportFile {
+  url: string;
+  name: string;
+  kind: "JSON" | "Markdown";
+}
+
+function ExportSettings({ state, today }: { state: AppState; today: string }) {
+  const [file, setFile] = useState<ExportFile | null>(null);
+  const made = useRef<string[]>([]);
+
+  useEffect(() => {
+    const urls = made.current;
+    return () => {
+      for (const url of urls) URL.revokeObjectURL(url);
+    };
+  }, []);
+
+  const make = (kind: ExportFile["kind"]) => {
+    const input: ExportInput = {
+      experiments: state.experiments,
+      trials: state.trials,
+      draws: state.allDraws,
+      sessions: state.sessions,
+      settings: state.settings,
+      today,
+      exportedAt: now().toISOString(),
+    };
+    const blob =
+      kind === "JSON"
+        ? new Blob([buildJsonExport(input)], { type: "application/json" })
+        : new Blob([buildMarkdownExport(input)], { type: "text/markdown" });
+    for (const old of made.current.splice(0)) URL.revokeObjectURL(old);
+    const url = URL.createObjectURL(blob);
+    made.current.push(url);
+    setFile({ url, name: exportFileName(today, kind === "JSON" ? "json" : "md"), kind });
+  };
+
+  return (
+    <section className="settings-group" aria-labelledby="export-title">
+      <h2 id="export-title" className="section-title">
+        Export
+      </h2>
+      <p className="settings-note">
+        Everything stays on this device. Export a copy to keep or read elsewhere. JSON holds every record; Markdown
+        reads like a journal. Photos and recordings stay in the app; the files list their names.
+      </p>
+      <div className="confirm-actions">
+        <button type="button" className="btn btn-secondary" onClick={() => make("JSON")}>
+          Export JSON
+        </button>
+        <button type="button" className="btn btn-secondary" onClick={() => make("Markdown")}>
+          Export Markdown
+        </button>
+      </div>
+      {file && (
+        <p className="download" aria-live="polite">
+          <a className="btn btn-primary" href={file.url} download={file.name}>
+            Download {file.name}
+          </a>
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ResetSettings() {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const reset = async () => {
+    setBusy(true);
+    await resetAllData();
+    reloadApp();
+  };
+
+  return (
+    <section className="settings-group" aria-labelledby="reset-title">
+      <h2 id="reset-title" className="section-title">
+        Reset
+      </h2>
+      {confirming ? (
+        <div className="confirm" role="group" aria-label="Confirm reset">
+          <p>
+            Delete every trial, session, photo, recording, and custom experiment on this device, then start again
+            from onboarding? Export first if you want a copy. This cannot be undone.
+          </p>
+          <div className="confirm-actions">
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void reset()}>
+              Delete everything
+            </button>
+            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setConfirming(false)}>
+              Keep my data
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="settings-note">Start over with an empty app and the seed library.</p>
+          <button type="button" className="btn btn-secondary" onClick={() => setConfirming(true)}>
+            Reset all data
+          </button>
+        </>
+      )}
+    </section>
+  );
 }

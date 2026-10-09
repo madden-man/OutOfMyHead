@@ -158,6 +158,17 @@ The nudge fires only while the app is open (no service worker push yet). The app
 ### Phase 3: the payoff
 Attachments (text, image, audio) stored in Dexie, work grid in Review, review charts and table view, export JSON and Markdown, PWA manifest + service worker (vite-plugin-pwa) for offline install, custom experiments, archive. Integration tests: attachments round-trip; export contains every session; review numbers match a hand-computed fixture.
 
+As built, with these deliberate choices:
+
+- One attachment per session. A session with an image or audio file keeps the text snippet on the same attachment as `text`, so the work grid shows the photo or recording with its caption. Files are checked before saving: image or audio only, up to 25 MB, with a plain sentence when one does not fit.
+- The draw's "behind the weekly floor" boost uses the same week floor as the floor strip (`DrawContext.weekFloors`, from `weekFloor` in `src/domain/floor.ts`): the lowest floor if the season changed mid-week, a short final week scaled, a resting experiment at 0. The season's flat floor is only the fallback.
+- Stats add `passedToSessions` (sessions logged after passing to the experiment, a positive signal), and the stats strip on the verdict screen and in Review also shows minutes and days drawn.
+- Review reads a closed trial as of the day it closed, so weeks after it never count. It lists the trial's roster, plus any experiment that has sessions in the trial but left the roster.
+- Custom experiments can be deleted only when no trial refers to them (roster, verdict, or replacement) and no session uses them; otherwise they can only be archived. An experiment in the active trial cannot be archived until it is removed from the trial. Archived experiments are hidden from onboarding, the Library (unless "Show archived" is on), and the replacement picker.
+- Exports leave image and audio blobs out and keep their kind, type, name, and size. Markdown lists sessions oldest first under each trial.
+- Reset deletes the Dexie database and reloads the page, which seeds the library again and lands on onboarding.
+- The service worker precaches the app shell and caches the Google Fonts after the first online visit. It registers only in production builds.
+
 ## Standards (mandatory)
 
 - Never use em dashes in any output: UI copy, code comments, commits, docs. Use commas, periods, or restructure.

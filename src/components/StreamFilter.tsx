@@ -6,10 +6,13 @@ export function StreamFilter({
   value,
   onChange,
   name,
+  counts,
 }: {
   value: StreamChoice;
   onChange: (value: StreamChoice) => void;
   name: string;
+  /** Optional count shown on each chip. The list's live count announces it too. */
+  counts?: Record<StreamChoice, number>;
 }) {
   const options: { value: StreamChoice; label: string }[] = [
     { value: "all", label: "All" },
@@ -27,7 +30,14 @@ export function StreamFilter({
             checked={value === o.value}
             onChange={() => onChange(o.value)}
           />
-          <span>{o.label}</span>
+          <span>
+            {o.label}
+            {counts && (
+              <span className="chip-count" aria-hidden="true">
+                {counts[o.value]}
+              </span>
+            )}
+          </span>
         </label>
       ))}
     </fieldset>

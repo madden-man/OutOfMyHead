@@ -1,5 +1,7 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { StreamTag } from "../components/StreamTag";
+import { BlobImage } from "../components/BlobMedia";
+import { checkAttachmentFile, formatBytes } from "../domain/attachments";
 import { PULL_LABELS, type Pull } from "../domain/types";
 import { now } from "../lib/clock";
 import { logSession } from "../state/actions";
@@ -44,6 +46,10 @@ export function LogSession({
   const [thought, setThought] = useState<boolean | null>(null);
   const [nextNote, setNextNote] = useState("");
   const [snippet, setSnippet] = useState("");
+  const [file, setFile] = useState<File | undefined>(undefined);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [timer, setTimer] = useState<TimerState>({ runningSince: null, accumulated: 0, firstStart: null });
   const [tick, setTick] = useState(() => now().getTime());
@@ -89,10 +95,29 @@ export function LogSession({
   const minutesValid = running || (minutes.trim() !== "" && Number.isFinite(minutesValue) && minutesValue > 0);
   const canSave = minutesValid && pull !== null && thought !== null && !saving;
 
+  const pickFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const picked = e.target.files?.[0];
+    if (!picked) return;
+    const check = checkAttachmentFile(picked);
+    if (!check.ok) {
+      setFileError(check.message);
+      e.target.value = "";
+      return;
+    }
+    setFileError(null);
+    setFile(picked);
+  };
+  const removeFile = () => {
+    setFile(undefined);
+    setFileError(null);
+    if (fileInput.current) fileInput.current.value = "";
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!canSave || pull === null || thought === null) return;
     setSaving(true);
+    setSaveError(null);
     const finalMinutes = running ? toMinutes(elapsed(timer, now().getTime())) : minutesValue;
     try {
       await logSession({
@@ -102,11 +127,13 @@ export function LogSession({
         thoughtAboutIt: thought,
         nextNote,
         snippet,
+        ...(file ? { file } : {}),
         ...(timer.firstStart ? { startedAt: timer.firstStart } : {}),
       });
       onDone();
-    } catch {
+    } catch (err) {
       setSaving(false);
+      setSaveError(err instanceof Error ? err.message : "That did not save. Try again.");
     }
   };
 
@@ -221,6 +248,36 @@ export function LogSession({
           />
         </section>
 
+        <section className="field">
+          <label className="field-label" htmlFor="attachment">
+            Image or audio <span className="field-optional">(optional)</span>
+          </label>
+          <input
+            ref={fileInput}
+            id="attachment"
+            className="file-input"
+            type="file"
+            accept="image/*,audio/*"
+            aria-describedby="attachment-hint"
+            onChange={pickFile}
+          />
+          <p id="attachment-hint" className="hint">
+            One photo or one recording, up to 25 MB.
+          </p>
+          {fileError && (
+            <p className="form-message" role="alert">
+              {fileError}
+            </p>
+          )}
+          {file && <FilePreview file={file} onRemove={removeFile} />}
+        </section>
+
+        {saveError && (
+          <p className="form-message" role="alert">
+            {saveError}
+          </p>
+        )}
+
         <div className="form-actions">
           <button type="submit" className="btn btn-primary btn-block" disabled={!canSave}>
             Save session
@@ -228,5 +285,23 @@ export function LogSession({
         </div>
       </form>
     </main>
+  );
+}
+
+function FilePreview({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const isImage = file.type.startsWith("image/");
+  return (
+    <div className="file-preview">
+      {isImage && <BlobImage className="file-preview-image" blob={file} alt={`Preview of ${file.name}`} />}
+      <div className="file-preview-meta">
+        <p className="file-preview-name">{file.name}</p>
+        <p className="hint">
+          {isImage ? "Image" : "Audio"}, {formatBytes(file.size)}
+        </p>
+        <button type="button" className="btn btn-secondary" aria-label={`Remove ${file.name}`} onClick={onRemove}>
+          Remove
+        </button>
+      </div>
+    </div>
   );
 }

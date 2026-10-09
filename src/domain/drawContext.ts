@@ -1,4 +1,5 @@
-import { addDays, trialDayIndex, trialWeekIndex, weekDayRange, dateOfTrialDay } from "./dates";
+import { addDays, trialDayIndex } from "./dates";
+import { currentWeek, trialWeeks, weekFloor } from "./floor";
 import type { DrawContext } from "./draw";
 import type { Draw, Experiment, Session, Settings, Trial } from "./types";
 
@@ -26,12 +27,17 @@ export function buildDrawContext(input: {
   const yesterday = addDays(today, -1);
   const drawnYesterday = earlier.find((d) => d.date === yesterday)?.experimentId;
 
-  const { first } = weekDayRange(trialWeekIndex(dayIndex));
-  const weekStart = dateOfTrialDay(trial.startDate, first);
+  // The same week and floor the floor strip shows, so the boost and the strip agree.
+  const week = currentWeek(trialWeeks(trial, today), today);
+  const weekStart = week?.startDate ?? today;
   const sessionsThisWeek: Record<string, number> = {};
   for (const s of sessions) {
     if (s.trialId !== trial.id || s.date < weekStart || s.date >= today) continue;
     sessionsThisWeek[s.experimentId] = (sessionsThisWeek[s.experimentId] ?? 0) + 1;
+  }
+  const weekFloors: Record<string, number> = {};
+  for (const e of active) {
+    weekFloors[e.id] = week ? weekFloor(settings, week, today, e) : settings.floorPerWeek[settings.season];
   }
 
   const ctx: DrawContext = {
@@ -41,6 +47,7 @@ export function buildDrawContext(input: {
     sessionsThisWeek,
     floorPerWeek: settings.floorPerWeek[settings.season],
     season: settings.season,
+    weekFloors,
   };
   if (drawnYesterday) ctx.drawnYesterday = drawnYesterday;
   return ctx;

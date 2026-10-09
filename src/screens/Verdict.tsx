@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { StreamFilter, type StreamChoice } from "../components/StreamFilter";
+import { StatsStrip } from "../components/StatsStrip";
 import { StreamTag } from "../components/StreamTag";
 import { filterExperiments } from "../components/filterExperiments";
 import { trialDayIndex } from "../domain/dates";
-import { formatPull, formatRate, trialStats, type ExperimentStats } from "../domain/stats";
+import { trialStats } from "../domain/stats";
 import { VERDICT_LABELS, type Experiment, type Verdict as VerdictChoice } from "../domain/types";
 import { nextRoster } from "../domain/verdict";
 import { closeTrial } from "../state/actions";
@@ -179,28 +180,6 @@ export function Verdict({
         </button>
       </section>
     </main>
-  );
-}
-
-function StatsStrip({ stats }: { stats: ExperimentStats | undefined }) {
-  if (!stats) return null;
-  const items: [string, string][] = [
-    ["Sessions", String(stats.sessions)],
-    ["Average pull", formatPull(stats.averagePull)],
-    ["Unprompted", String(stats.unprompted)],
-    ["Thought about it", formatRate(stats.thoughtAboutItRate)],
-    ["Passes", String(stats.passes)],
-    ["Floor weeks cleared", String(stats.floorWeeksCleared)],
-  ];
-  return (
-    <dl className="stats-strip">
-      {items.map(([label, value]) => (
-        <div key={label}>
-          <dt>{label}</dt>
-          <dd>{value}</dd>
-        </div>
-      ))}
-    </dl>
   );
 }
 

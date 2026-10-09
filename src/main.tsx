@@ -13,3 +13,8 @@ createRoot(root).render(
     <App />
   </StrictMode>,
 );
+
+// Offline install: register the service worker in production builds only.
+if (import.meta.env.PROD) {
+  void import("virtual:pwa-register").then(({ registerSW }) => registerSW({ immediate: true }));
+}

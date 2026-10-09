@@ -36,6 +36,10 @@
   --radius-lg: 18px;
   --gutter: 16px;
   --tap: 44px;
+  /* Fixed bottom bars, without the safe-area inset they add themselves.
+     Tab bar: 6 + 56 + 6 plus a 1px border. Action bar: 12 + 44 + 12 plus 1. */
+  --tabbar-height: 69px;
+  --action-bar-height: 69px;
 }
 
 @media (prefers-color-scheme: dark) {

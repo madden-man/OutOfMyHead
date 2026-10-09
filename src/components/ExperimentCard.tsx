@@ -18,15 +18,21 @@ export function ExperimentCard({
     >
       <div className="exp-card-meta">
         <StreamTag stream={experiment.stream} />
-        {experiment.portable && <span className="badge">Portable</span>}
+        <span className="exp-card-badges">
+          {experiment.archived && <span className="badge">Archived</span>}
+          {experiment.custom && <span className="badge">Custom</span>}
+          {experiment.portable && <span className="badge">Portable</span>}
+        </span>
       </div>
       <h3 className="exp-card-name">{experiment.name}</h3>
-      <p className="exp-card-do">{experiment.do}</p>
+      {experiment.do && <p className="exp-card-do">{experiment.do}</p>}
       <dl className="exp-card-facts">
-        <div>
-          <dt>Tests</dt>
-          <dd>{experiment.tests}</dd>
-        </div>
+        {experiment.tests && (
+          <div>
+            <dt>Tests</dt>
+            <dd>{experiment.tests}</dd>
+          </div>
+        )}
         <div>
           <dt>Minimum</dt>
           <dd>{experiment.unit}</dd>

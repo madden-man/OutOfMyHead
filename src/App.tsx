@@ -11,6 +11,7 @@ import { Today } from "./screens/Today";
 import { LogSession } from "./screens/LogSession";
 import { TrialScreen } from "./screens/TrialScreen";
 import { Library } from "./screens/Library";
+import { Review } from "./screens/Review";
 import { Settings } from "./screens/Settings";
 import { Verdict } from "./screens/Verdict";
 
@@ -88,7 +89,7 @@ export function App() {
 
   return (
     <div className="app">
-      <div className="app-body">
+      <div className={fullScreen ? "app-body is-full" : "app-body"}>
         {route.name === "today" && <Today state={state} today={today} go={go} />}
         {route.name === "log" && (
           <LogSession
@@ -98,8 +99,9 @@ export function App() {
           />
         )}
         {route.name === "trial" && <TrialScreen state={state} today={today} go={go} />}
+        {route.name === "review" && <Review state={state} today={today} />}
         {route.name === "library" && <Library state={state} />}
-        {route.name === "settings" && <Settings state={state} />}
+        {route.name === "settings" && <Settings state={state} today={today} />}
         {route.name === "verdict" && (
           <Verdict
             state={state}

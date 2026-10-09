@@ -1,8 +1,9 @@
-export type Tab = "today" | "trial" | "library" | "settings";
+export type Tab = "today" | "trial" | "review" | "library" | "settings";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "today", label: "Today" },
   { id: "trial", label: "Trial" },
+  { id: "review", label: "Review" },
   { id: "library", label: "Library" },
   { id: "settings", label: "Settings" },
 ];
@@ -55,6 +56,14 @@ function TabIcon({ tab }: { tab: Tab }) {
         <rect x="4" y="10" width="4" height="4" rx="1" />
         <rect x="10" y="10" width="4" height="4" rx="1" />
         <rect x="4" y="16" width="4" height="4" rx="1" />
+      </svg>
+    );
+  }
+  if (tab === "review") {
+    return (
+      <svg {...common}>
+        <path d="M4 20h16" />
+        <path d="M4 15h9M4 10h13M4 5h6" />
       </svg>
     );
   }

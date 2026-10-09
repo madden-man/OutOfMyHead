@@ -32,7 +32,7 @@ const draw = (d: number, experimentId: string, passedTo?: string): Draw => ({
 });
 
 // Hand-computed fixture: a has 4 sessions in trial t1, pulls 5, 4, 2, 3, two
-// thought about, one unprompted. Week 1: 3 sessions (cleared), week 2: 1.
+// thought about, one unprompted, one passed-to. Week 1: 3 sessions (cleared), week 2: 1.
 const sessions = [
   s(1, "a", 5, true),
   s(2, "a", 4, false, "unprompted"),
@@ -51,6 +51,7 @@ describe("experimentStats", () => {
       minutes: 40,
       averagePull: 3.5,
       unprompted: 1,
+      passedToSessions: 1,
       thoughtAboutItRate: 0.5,
       passes: 1,
       daysDrawn: 3,

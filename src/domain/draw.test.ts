@@ -46,6 +46,12 @@ describe("computeWeights", () => {
     expect(w).toEqual({ a: 1, b: 1, c: 1 });
   });
 
+  it("uses each experiment's week floor over the season floor", () => {
+    // Season floor 2, but this week a's floor is 1 (season changed) and b rests at 0.
+    const w = computeWeights(base({ sessionsThisWeek: { a: 1, b: 0, c: 1 }, weekFloors: { a: 1, b: 0 } }));
+    expect(w).toEqual({ a: 1, b: 1, c: 2 });
+  });
+
   it("combines the steps in order", () => {
     // b: 1 * 0.4 + max(0, 1 - 0) * 0.5 + 1 = 1.9
     const w = computeWeights(

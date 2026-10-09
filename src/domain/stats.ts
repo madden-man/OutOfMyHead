@@ -9,6 +9,8 @@ export interface ExperimentStats {
   /** Mean pull, 1 to 5, or null with no sessions. */
   averagePull: number | null;
   unprompted: number;
+  /** Sessions logged on this experiment after passing to it: chosen over the draw. */
+  passedToSessions: number;
   /** Share of sessions where the user had thought about it since last time, 0 to 1, or null. */
   thoughtAboutItRate: number | null;
   /** Days the draw landed on this experiment and the user passed to another. */
@@ -37,6 +39,7 @@ export function experimentStats(input: StatsInput & { experiment: { id: string; 
     minutes: mine.reduce((sum, s) => sum + s.minutes, 0),
     averagePull: n === 0 ? null : round(mine.reduce((sum, s) => sum + s.pull, 0) / n, 2),
     unprompted: mine.filter((s) => s.origin === "unprompted").length,
+    passedToSessions: mine.filter((s) => s.origin === "passed-to").length,
     thoughtAboutItRate: n === 0 ? null : round(mine.filter((s) => s.thoughtAboutIt).length / n, 3),
     passes: drawn.filter((d) => d.passedTo !== undefined && d.passedTo !== experiment.id).length,
     daysDrawn: drawn.length,
@@ -52,6 +55,21 @@ export function trialStats(
   const out: Record<string, ExperimentStats> = {};
   for (const experiment of input.experiments) out[experiment.id] = experimentStats({ ...input, experiment });
   return out;
+}
+
+/** The per-experiment numbers as label and value, shared by the verdict screen and Review. */
+export function statsRows(stats: ExperimentStats): [string, string][] {
+  return [
+    ["Sessions", String(stats.sessions)],
+    ["Minutes", String(stats.minutes)],
+    ["Average pull", formatPull(stats.averagePull)],
+    ["Unprompted", String(stats.unprompted)],
+    ["Passed to", String(stats.passedToSessions)],
+    ["Thought about it", formatRate(stats.thoughtAboutItRate)],
+    ["Passes", String(stats.passes)],
+    ["Days drawn", String(stats.daysDrawn)],
+    ["Floor weeks cleared", String(stats.floorWeeksCleared)],
+  ];
 }
 
 export function formatPull(pull: number | null): string {

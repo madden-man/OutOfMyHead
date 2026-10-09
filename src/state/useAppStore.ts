@@ -10,20 +10,24 @@ export interface AppState {
   trial: Trial | undefined;
   /** Every trial, oldest first. */
   trials: Trial[];
+  /** Draws for the active trial. */
   draws: Draw[];
+  /** Draws for every trial, for Review and export. */
+  allDraws: Draw[];
   sessions: Session[];
   notes: Record<string, string>;
 }
 
 async function load(): Promise<AppState> {
-  const [settings, experiments, trials, sessions] = await Promise.all([
+  const [settings, experiments, trials, sessions, allDraws] = await Promise.all([
     db.settings.get("settings"),
     db.experiments.toArray(),
     db.trials.orderBy("number").toArray(),
     db.sessions.toArray(),
+    db.draws.toArray(),
   ]);
   const trial = trials.find((t) => t.status === "active");
-  const draws = trial ? await db.draws.where("trialId").equals(trial.id).toArray() : [];
+  const draws = trial ? allDraws.filter((d) => d.trialId === trial.id) : [];
   experiments.sort((a, b) => (a.seedId ?? 1e9) - (b.seedId ?? 1e9) || a.name.localeCompare(b.name));
   return {
     settings,
@@ -32,6 +36,7 @@ async function load(): Promise<AppState> {
     trial,
     trials,
     draws,
+    allDraws,
     sessions,
     notes: nextNotes(sessions),
   };

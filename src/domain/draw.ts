@@ -21,6 +21,12 @@ export interface DrawContext {
   sessionsThisWeek: Record<string, number>;
   /** The floor for the current season, in sessions per experiment per week. */
   floorPerWeek: number;
+  /**
+   * This week's floor per experiment, when known. It follows the floor strip:
+   * the lowest floor if the season changed mid-week, a short final week
+   * scaled, a resting experiment at 0. Falls back to `floorPerWeek`.
+   */
+  weekFloors?: Record<string, number>;
   season: Season;
 }
 
@@ -50,7 +56,8 @@ export function computeWeights(ctx: DrawContext): Record<string, number> {
     if (ctx.drawnYesterday === exp.id) w *= YESTERDAY_FACTOR;
     const deficit = expected - (ctx.timesDrawn[exp.id] ?? 0);
     w += Math.max(0, deficit) * FAIRNESS_FACTOR;
-    if ((ctx.sessionsThisWeek[exp.id] ?? 0) < ctx.floorPerWeek) w += FLOOR_BOOST;
+    const floor = ctx.weekFloors?.[exp.id] ?? ctx.floorPerWeek;
+    if ((ctx.sessionsThisWeek[exp.id] ?? 0) < floor) w += FLOOR_BOOST;
     if (ctx.season === "travel" && !exp.portable) w = 0;
     weights[exp.id] = round(w);
   }

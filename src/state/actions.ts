@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import { db } from "../db/db";
 import { buildDrawContext } from "../domain/drawContext";
 import { drawExperiment, rerollExperiment } from "../domain/draw";
+import { checkAttachmentFile } from "../domain/attachments";
 import { sessionOrigin } from "../domain/origin";
 import { clampFloor, withSeason } from "../domain/seasons";
 import { nextRoster } from "../domain/verdict";
@@ -12,7 +13,9 @@ import {
   MIN_ACTIVE,
   type Attachment,
   type Draw,
+  type Experiment,
   type Pull,
+  type Stream,
   type Season,
   type Session,
   type Settings,
@@ -111,6 +114,8 @@ export interface SessionInput {
   nextNote: string;
   startedAt?: string;
   snippet?: string;
+  /** One image or audio file. Checked against the size limit before it is stored. */
+  file?: Blob & { name?: string };
 }
 
 /** Log a session for today. The origin is derived from today's draw. */
@@ -135,9 +140,15 @@ export async function logSession(input: SessionInput): Promise<Session> {
       nextNote: input.nextNote.trim(),
     };
     const snippet = input.snippet?.trim();
-    if (snippet) {
-      const attachment: Attachment = { kind: "text", text: snippet };
+    if (input.file) {
+      const check = checkAttachmentFile(input.file);
+      if (!check.ok) throw new Error(check.message);
+      const attachment: Attachment = { kind: check.kind, blob: input.file, mime: input.file.type };
+      if (input.file.name) attachment.name = input.file.name;
+      if (snippet) attachment.text = snippet;
       session.attachment = attachment;
+    } else if (snippet) {
+      session.attachment = { kind: "text", text: snippet };
     }
     await db.sessions.add(session);
     return session;
@@ -252,4 +263,81 @@ export async function closeTrial(input: CloseTrialInput): Promise<Trial> {
     await db.trials.add(next);
     return next;
   });
+}
+
+export interface NewExperiment {
+  name: string;
+  stream: Stream;
+  do: string;
+  tests: string;
+  unit: string;
+  portable: boolean;
+}
+
+/** A user-authored experiment. It joins the library, not the trial. */
+export async function createExperiment(input: NewExperiment): Promise<Experiment> {
+  const name = input.name.trim();
+  if (!name) throw new Error("A custom experiment needs a name");
+  const experiment: Experiment = {
+    id: nanoid(),
+    stream: input.stream,
+    name,
+    do: input.do.trim(),
+    tests: input.tests.trim(),
+    unit: input.unit.trim(),
+    portable: input.portable,
+    custom: true,
+    archived: false,
+  };
+  await db.experiments.add(experiment);
+  return experiment;
+}
+
+export type ArchiveResult = { ok: true } | { ok: false; reason: "in-trial" };
+
+/** Hide an experiment from the library, or bring it back. One in the active trial stays visible. */
+export async function setArchived(experimentId: string, archived: boolean): Promise<ArchiveResult> {
+  return db.transaction("rw", db.experiments, db.trials, async () => {
+    if (archived) {
+      const trial = await getActiveTrial();
+      if (trial?.experimentIds.includes(experimentId)) return { ok: false, reason: "in-trial" } as const;
+    }
+    await db.experiments.update(experimentId, { archived });
+    return { ok: true } as const;
+  });
+}
+
+/** Whether any trial, past or present, refers to the experiment. */
+export function trialReferences(trials: readonly Trial[], experimentId: string): boolean {
+  return trials.some(
+    (t) =>
+      t.experimentIds.includes(experimentId) ||
+      Object.values(t.replacements ?? {}).includes(experimentId) ||
+      experimentId in (t.verdicts ?? {}),
+  );
+}
+
+export type DeleteResult = { ok: true } | { ok: false; reason: "seed" | "referenced" };
+
+/**
+ * Delete a custom experiment that no trial refers to and no session uses.
+ * Seed experiments and anything with history can only be archived.
+ */
+export async function deleteExperiment(experimentId: string): Promise<DeleteResult> {
+  return db.transaction("rw", db.experiments, db.trials, db.sessions, async () => {
+    const experiment = await db.experiments.get(experimentId);
+    if (!experiment) return { ok: true } as const;
+    if (!experiment.custom) return { ok: false, reason: "seed" } as const;
+    const trials = await db.trials.toArray();
+    const used = (await db.sessions.where("experimentId").equals(experimentId).count()) > 0;
+    if (used || trialReferences(trials, experimentId)) return { ok: false, reason: "referenced" } as const;
+    await db.experiments.delete(experimentId);
+    return { ok: true } as const;
+  });
+}
+
+/** Delete the whole local database. The caller reloads to land on onboarding. */
+export async function resetAllData(): Promise<void> {
+  // Keep auto-open so live queries see an empty store until the reload.
+  await db.delete({ disableAutoOpen: false });
 }
