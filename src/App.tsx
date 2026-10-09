@@ -2,22 +2,36 @@ import { useEffect, useState } from "react";
 import { ensureSeeded } from "./db/seed";
 import { TabBar, type Tab } from "./components/TabBar";
 import { ensureTodayDraw } from "./state/actions";
-import { useAppStore } from "./state/useAppStore";
-import { today as todayFromClock } from "./lib/clock";
+import { useAppStore, type AppState } from "./state/useAppStore";
+import { useNudge } from "./state/useNudge";
+import { useToday } from "./state/useToday";
+import { nudgeBody } from "./domain/nudge";
 import { Onboarding } from "./screens/Onboarding";
 import { Today } from "./screens/Today";
 import { LogSession } from "./screens/LogSession";
 import { TrialScreen } from "./screens/TrialScreen";
 import { Library } from "./screens/Library";
+import { Settings } from "./screens/Settings";
+import { Verdict } from "./screens/Verdict";
 
-export type Route = { name: Tab } | { name: "log"; experimentId: string };
+export type Route = { name: Tab } | { name: "log"; experimentId: string } | { name: "verdict" };
+
+/** The nudge text for today's draw, or undefined before the draw exists. */
+function todayNudge(state: AppState | undefined, today: string): string | undefined {
+  const draw = state?.draws.find((d) => d.date === today);
+  if (!state || !draw) return undefined;
+  const id = draw.passedTo ?? draw.experimentId;
+  const experiment = state.experimentsById.get(id);
+  return experiment ? nudgeBody(experiment.name, state.notes[id]) : undefined;
+}
 
 export function App() {
   const [seeded, setSeeded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [route, setRoute] = useState<Route>({ name: "today" });
   const state = useAppStore();
-  const today = todayFromClock();
+  const today = useToday();
+  useNudge(state?.settings?.onboarded ? state.settings.nudgeTime : undefined, todayNudge(state, today));
 
   useEffect(() => {
     let cancelled = false;
@@ -69,7 +83,8 @@ export function App() {
   }
 
   const go = (next: Route) => setRoute(next);
-  const tab: Tab | undefined = route.name === "log" ? undefined : route.name;
+  const tab: Tab | undefined = route.name === "log" || route.name === "verdict" ? undefined : route.name;
+  const fullScreen = route.name === "log" || route.name === "verdict";
 
   return (
     <div className="app">
@@ -82,10 +97,19 @@ export function App() {
             onDone={() => go({ name: "today" })}
           />
         )}
-        {route.name === "trial" && <TrialScreen state={state} today={today} />}
+        {route.name === "trial" && <TrialScreen state={state} today={today} go={go} />}
         {route.name === "library" && <Library state={state} />}
+        {route.name === "settings" && <Settings state={state} />}
+        {route.name === "verdict" && (
+          <Verdict
+            state={state}
+            today={today}
+            onBack={() => go({ name: "today" })}
+            onClosed={() => go({ name: "today" })}
+          />
+        )}
       </div>
-      {route.name !== "log" && <TabBar current={tab} onSelect={(t) => go({ name: t })} />}
+      {!fullScreen && <TabBar current={tab} onSelect={(t) => go({ name: t })} />}
     </div>
   );
 }

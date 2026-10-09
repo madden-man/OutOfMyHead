@@ -15,6 +15,11 @@ beforeEach(async () => {
 
 afterEach(() => {
   cleanup();
+  try {
+    window.localStorage.clear();
+  } catch {
+    // Some environments block storage; nothing to clear.
+  }
   resetClock();
   resetRng();
 });

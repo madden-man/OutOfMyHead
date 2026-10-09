@@ -32,6 +32,7 @@ export function ExperimentCard({
           <dd>{experiment.unit}</dd>
         </div>
       </dl>
+      {experiment.source && <p className="exp-card-source">Source: {experiment.source}</p>}
       {children && <div className="exp-card-actions">{children}</div>}
     </article>
   );

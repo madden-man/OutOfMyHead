@@ -1,7 +1,9 @@
 import { useState } from "react";
 import type { Route } from "../App";
+import { FloorStrip } from "../components/FloorStrip";
 import { StreamTag } from "../components/StreamTag";
 import { trialDayIndex } from "../domain/dates";
+import { floorStrip } from "../domain/floor";
 import type { Draw, Experiment, Season } from "../domain/types";
 import { passTo, rerollDraw } from "../state/actions";
 import type { AppState } from "../state/useAppStore";
@@ -27,6 +29,8 @@ export function Today({ state, today, go }: { state: AppState; today: string; go
   const others = active.filter((e) => e.id !== focusId);
   const todaySessions = sessions.filter((s) => s.trialId === trial.id && s.date === today);
   const newborn = settings.season === "newborn";
+  const travel = settings.season === "travel";
+  const lastDayReached = day >= trial.lengthDays;
 
   const minutesToday = (id: string) =>
     todaySessions.filter((s) => s.experimentId === id).reduce((sum, s) => sum + s.minutes, 0);
@@ -46,6 +50,18 @@ export function Today({ state, today, go }: { state: AppState; today: string; go
           <p className="hint">Past the planned {trial.lengthDays} days. The draw keeps going until you close the trial.</p>
         )}
       </header>
+
+      {lastDayReached && (
+        <section className="close-banner" aria-labelledby="close-title">
+          <h2 id="close-title" className="close-banner-title">
+            {day === trial.lengthDays ? "Last planned day" : "Ready when you are"}
+          </h2>
+          <p>Read how each experiment went, then keep, cut, or extend it for trial {trial.number + 1}.</p>
+          <button type="button" className="btn btn-primary btn-block" onClick={() => go({ name: "verdict" })}>
+            Close this trial
+          </button>
+        </section>
+      )}
 
       {!draw || !focus ? (
         <section className="draw-card is-loading" aria-busy="true">
@@ -141,9 +157,13 @@ export function Today({ state, today, go }: { state: AppState; today: string; go
                   <summary>
                     <span className="stream-dot" aria-hidden="true" />
                     <span className="other-name">{e.name}</span>
+                    {travel && !e.portable && <span className="badge">Resting</span>}
                     {countToday(e.id) > 0 && <span className="badge">Logged today</span>}
                   </summary>
                   <div className="other-body">
+                    {travel && !e.portable && (
+                      <p className="hint">Resting while you travel. The draw skips it until the season changes.</p>
+                    )}
                     <NextNote note={notes[e.id]} />
                     <button
                       type="button"
@@ -160,8 +180,37 @@ export function Today({ state, today, go }: { state: AppState; today: string; go
           </ul>
         </section>
       )}
+
+      <section className="floor" aria-labelledby="floor-title">
+        <h2 id="floor-title" className="section-title">
+          Weekly floor
+        </h2>
+        <p className="hint floor-intro">{floorIntro(settings.season, settings.floorPerWeek[settings.season])}</p>
+        <ul className="floor-list">
+          {active.map((e) => (
+            <li key={e.id} className={`floor-row stream-${e.stream}`}>
+              <p className="floor-name">
+                <span className="stream-dot" aria-hidden="true" />
+                {e.name}
+              </p>
+              <FloorStrip
+                label={`Weekly floor for ${e.name}`}
+                pills={floorStrip({ trial, sessions, settings, today, experiment: e })}
+              />
+            </li>
+          ))}
+        </ul>
+      </section>
     </main>
   );
+}
+
+function floorIntro(season: Season, floor: number): string {
+  if (floor === 0) return "No floor this season. Every session counts, and nothing here is owed.";
+  const sessions = floor === 1 ? "1 session" : `${floor} sessions`;
+  if (season === "newborn") return `${sessions} per experiment per week. Newborn weeks never break a streak.`;
+  if (season === "travel") return `${sessions} per portable experiment per week. The rest are resting.`;
+  return `${sessions} per experiment per week. Anything above it is bonus.`;
 }
 
 function NextNote({ note }: { note: string | undefined }) {

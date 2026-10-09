@@ -8,18 +8,21 @@ export interface AppState {
   experiments: Experiment[];
   experimentsById: Map<string, Experiment>;
   trial: Trial | undefined;
+  /** Every trial, oldest first. */
+  trials: Trial[];
   draws: Draw[];
   sessions: Session[];
   notes: Record<string, string>;
 }
 
 async function load(): Promise<AppState> {
-  const [settings, experiments, trial, sessions] = await Promise.all([
+  const [settings, experiments, trials, sessions] = await Promise.all([
     db.settings.get("settings"),
     db.experiments.toArray(),
-    db.trials.where("status").equals("active").first(),
+    db.trials.orderBy("number").toArray(),
     db.sessions.toArray(),
   ]);
+  const trial = trials.find((t) => t.status === "active");
   const draws = trial ? await db.draws.where("trialId").equals(trial.id).toArray() : [];
   experiments.sort((a, b) => (a.seedId ?? 1e9) - (b.seedId ?? 1e9) || a.name.localeCompare(b.name));
   return {
@@ -27,6 +30,7 @@ async function load(): Promise<AppState> {
     experiments,
     experimentsById: new Map(experiments.map((e) => [e.id, e])),
     trial,
+    trials,
     draws,
     sessions,
     notes: nextNotes(sessions),

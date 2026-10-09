@@ -3,6 +3,8 @@ import { db } from "../db/db";
 import { buildDrawContext } from "../domain/drawContext";
 import { drawExperiment, rerollExperiment } from "../domain/draw";
 import { sessionOrigin } from "../domain/origin";
+import { clampFloor, withSeason } from "../domain/seasons";
+import { nextRoster } from "../domain/verdict";
 import {
   DEFAULT_SETTINGS,
   DEFAULT_TRIAL_LENGTH,
@@ -11,8 +13,11 @@ import {
   type Attachment,
   type Draw,
   type Pull,
+  type Season,
   type Session,
+  type Settings,
   type Trial,
+  type Verdict,
 } from "../domain/types";
 import { now, today } from "../lib/clock";
 import { rng } from "../lib/random";
@@ -168,5 +173,83 @@ export async function removeFromTrial(experimentId: string): Promise<TrialChange
       await db.draws.delete(draw.id);
     }
     return { ok: true } as const;
+  });
+}
+
+async function readSettings(): Promise<Settings> {
+  const settings = await db.settings.get("settings");
+  return settings ?? { ...DEFAULT_SETTINGS, floorPerWeek: { ...DEFAULT_SETTINGS.floorPerWeek } };
+}
+
+/**
+ * Switch the season from today on. Today's draw is already locked and stays;
+ * the new season shapes tomorrow's draw.
+ */
+export async function setSeason(season: Season): Promise<void> {
+  await db.transaction("rw", db.settings, async () => {
+    const settings = await readSettings();
+    await db.settings.put(withSeason(settings, season, today()));
+  });
+}
+
+/** Set the weekly floor for one season, kept to 0 through 7. */
+export async function setFloor(season: Season, floor: number): Promise<void> {
+  await db.transaction("rw", db.settings, async () => {
+    const settings = await readSettings();
+    await db.settings.put({ ...settings, floorPerWeek: { ...settings.floorPerWeek, [season]: clampFloor(floor) } });
+  });
+}
+
+/** Set or clear the single daily nudge time ("HH:MM"). */
+export async function setNudgeTime(time: string | undefined): Promise<void> {
+  await db.transaction("rw", db.settings, async () => {
+    const settings = await readSettings();
+    const next: Settings = { ...settings };
+    if (time) next.nudgeTime = time;
+    else delete next.nudgeTime;
+    await db.settings.put(next);
+  });
+}
+
+export interface CloseTrialInput {
+  verdicts: Record<string, Verdict>;
+  /** For each cut experiment, the library experiment that takes its place. */
+  replacements: Record<string, string>;
+}
+
+/**
+ * Close the active trial with a verdict per experiment and open the next one
+ * starting today. Keep and extend carry over; each cut is swapped for its
+ * replacement, so the next trial has as many experiments as this one.
+ */
+export async function closeTrial(input: CloseTrialInput): Promise<Trial> {
+  return db.transaction("rw", db.trials, async () => {
+    const trial = await getActiveTrial();
+    if (!trial) throw new Error("No active trial");
+    const roster = nextRoster(trial.experimentIds, input.verdicts, input.replacements);
+    if (!roster.ok) throw new Error(`Cannot close trial: ${roster.reason}`);
+
+    const verdicts: Record<string, Verdict> = {};
+    const replacements: Record<string, string> = {};
+    for (const id of trial.experimentIds) {
+      const verdict = input.verdicts[id];
+      if (verdict) verdicts[id] = verdict;
+      const replacement = input.replacements[id];
+      if (verdict === "cut" && replacement) replacements[id] = replacement;
+    }
+    const closed: Partial<Trial> = { status: "closed", verdicts, closedAt: now().toISOString() };
+    if (Object.keys(replacements).length > 0) closed.replacements = replacements;
+    await db.trials.update(trial.id, closed);
+
+    const next: Trial = {
+      id: nanoid(),
+      number: trial.number + 1,
+      startDate: today(),
+      lengthDays: DEFAULT_TRIAL_LENGTH,
+      experimentIds: roster.experimentIds,
+      status: "active",
+    };
+    await db.trials.add(next);
+    return next;
   });
 }

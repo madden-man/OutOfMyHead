@@ -171,7 +171,7 @@ select {
 
 .hint {
   font-size: 14px;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 /* Stream tag */
@@ -394,7 +394,7 @@ select {
   bottom: 0;
   z-index: 10;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   padding: 6px var(--gutter) calc(6px + env(safe-area-inset-bottom));
   background: var(--color-overlay);
   border-top: 1px solid var(--color-border);

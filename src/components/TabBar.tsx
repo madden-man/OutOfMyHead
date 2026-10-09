@@ -1,9 +1,10 @@
-export type Tab = "today" | "trial" | "library";
+export type Tab = "today" | "trial" | "library" | "settings";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "today", label: "Today" },
   { id: "trial", label: "Trial" },
   { id: "library", label: "Library" },
+  { id: "settings", label: "Settings" },
 ];
 
 export function TabBar({ current, onSelect }: { current: Tab | undefined; onSelect: (tab: Tab) => void }) {
@@ -54,6 +55,15 @@ function TabIcon({ tab }: { tab: Tab }) {
         <rect x="4" y="10" width="4" height="4" rx="1" />
         <rect x="10" y="10" width="4" height="4" rx="1" />
         <rect x="4" y="16" width="4" height="4" rx="1" />
+      </svg>
+    );
+  }
+  if (tab === "settings") {
+    return (
+      <svg {...common}>
+        <path d="M4 7h10M18 7h2M4 17h4M12 17h8" />
+        <circle cx="16" cy="7" r="2" />
+        <circle cx="10" cy="17" r="2" />
       </svg>
     );
   }

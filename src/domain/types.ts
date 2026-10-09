@@ -9,6 +9,7 @@ export interface Experiment {
   tests: string; // what this experiment tests
   unit: string; // the minimum unit, e.g. "one 100-word fragment"
   portable: boolean; // can it come on a trip
+  source?: string; // where the idea comes from, for seed experiments
   custom: boolean; // user-authored
   archived: boolean;
 }
@@ -22,9 +23,12 @@ export interface Trial {
   lengthDays: number; // default 21
   experimentIds: string[]; // 2..4 active experiments
   status: "active" | "closed";
-  verdicts?: Record<string, "keep" | "cut" | "extend">;
+  verdicts?: Record<string, Verdict>;
+  replacements?: Record<string, string>; // cut experimentId to the experimentId that replaced it
   closedAt?: string;
 }
+
+export type Verdict = "keep" | "cut" | "extend";
 
 export interface Draw {
   id: string;
@@ -66,6 +70,13 @@ export interface Settings {
   floorPerWeek: Record<Season, number>; // sessions per experiment per week; default normal 2, travel 1, newborn 0
   nudgeTime?: string; // "HH:MM" local, optional single daily nudge
   onboarded: boolean;
+  seasonLog?: SeasonChange[]; // when the season changed, so past weeks keep the floor they had
+}
+
+/** The season in effect from `date` on, until the next change. */
+export interface SeasonChange {
+  date: string;
+  season: Season;
 }
 
 export type Pull = Session["pull"];
@@ -86,7 +97,21 @@ export const PULL_LABELS: Record<Pull, string> = {
   5: "Could not wait",
 };
 
+export const SEASON_LABELS: Record<Season, string> = {
+  normal: "Normal",
+  travel: "Travel",
+  newborn: "Newborn",
+};
+
+export const VERDICT_LABELS: Record<Verdict, string> = {
+  keep: "Keep",
+  cut: "Cut",
+  extend: "Extend",
+};
+
 export const DEFAULT_TRIAL_LENGTH = 21;
+export const MIN_FLOOR = 0;
+export const MAX_FLOOR = 7;
 export const MIN_ACTIVE = 2;
 export const MAX_ACTIVE = 4;
 

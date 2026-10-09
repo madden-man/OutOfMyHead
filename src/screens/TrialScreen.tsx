@@ -1,5 +1,9 @@
+import { useState } from "react";
+import type { Route } from "../App";
+import { FloorStrip } from "../components/FloorStrip";
 import { StreamTag } from "../components/StreamTag";
 import { dateOfTrialDay, parseLocalISODate, trialDayIndex } from "../domain/dates";
+import { floorStrip, streakWeeks } from "../domain/floor";
 import type { Experiment } from "../domain/types";
 import type { AppState } from "../state/useAppStore";
 
@@ -9,9 +13,10 @@ function formatDate(iso: string): string {
   return dateFormat.format(parseLocalISODate(iso));
 }
 
-export function TrialScreen({ state, today }: { state: AppState; today: string }) {
-  const { trial, experimentsById, draws, sessions } = state;
-  if (!trial) return null;
+export function TrialScreen({ state, today, go }: { state: AppState; today: string; go: (r: Route) => void }) {
+  const { trial, trials, settings, experimentsById, draws, sessions } = state;
+  const [confirming, setConfirming] = useState(false);
+  if (!trial || !settings) return null;
 
   const day = trialDayIndex(trial.startDate, today);
   const remaining = Math.max(0, trial.lengthDays - day);
@@ -20,6 +25,10 @@ export function TrialScreen({ state, today }: { state: AppState; today: string }
     .filter((e): e is Experiment => e !== undefined);
   const trialSessions = sessions.filter((s) => s.trialId === trial.id);
   const drawsByDate = new Map(draws.map((d) => [d.date, d]));
+  const streak = streakWeeks({ trial, sessions, settings, today, experiments: active });
+  const previous = trials.find((t) => t.number === trial.number - 1);
+  const extended = (id: string) => previous?.verdicts?.[id] === "extend";
+  const lastDayReached = day >= trial.lengthDays;
 
   const weeks: number[][] = [];
   for (let d = 1; d <= trial.lengthDays; d++) {
@@ -42,6 +51,18 @@ export function TrialScreen({ state, today }: { state: AppState; today: string }
         </p>
       </header>
 
+      <section className="streak" aria-labelledby="streak-title">
+        <h2 id="streak-title" className="eyebrow">
+          Streak
+        </h2>
+        <p className="streak-value" data-testid="streak">
+          {streak === 1 ? "1 week" : `${streak} weeks`}
+        </p>
+        <p className="hint">
+          Weeks in a row where every experiment cleared its floor. Newborn weeks pause the count, they never end it.
+        </p>
+      </section>
+
       <section aria-labelledby="active-title">
         <h2 id="active-title" className="section-title">
           Active experiments
@@ -52,11 +73,18 @@ export function TrialScreen({ state, today }: { state: AppState; today: string }
             const logged = trialSessions.filter((s) => s.experimentId === e.id).length;
             return (
               <li key={e.id} className={`active-item stream-${e.stream}`}>
-                <StreamTag stream={e.stream} />
+                <div className="active-meta">
+                  <StreamTag stream={e.stream} />
+                  {extended(e.id) && <span className="badge">Extended from trial {previous?.number}</span>}
+                </div>
                 <p className="active-name">{e.name}</p>
                 <p className="active-stats">
                   Drawn {drawn === 1 ? "1 day" : `${drawn} days`}, {logged === 1 ? "1 session" : `${logged} sessions`}
                 </p>
+                <FloorStrip
+                  label={`Weekly floor for ${e.name}`}
+                  pills={floorStrip({ trial, sessions, settings, today, experiment: e })}
+                />
               </li>
             );
           })}
@@ -126,6 +154,42 @@ export function TrialScreen({ state, today }: { state: AppState; today: string }
             Passed
           </li>
         </ul>
+      </section>
+
+      <section className="close-trial" aria-labelledby="close-trial-title">
+        <h2 id="close-trial-title" className="section-title">
+          {lastDayReached ? "Close this trial" : "Close trial early"}
+        </h2>
+        {lastDayReached ? (
+          <>
+            <p className="hint">Keep, cut, or extend each experiment, then trial {trial.number + 1} starts today.</p>
+            <button type="button" className="btn btn-primary btn-block" onClick={() => go({ name: "verdict" })}>
+              Close this trial
+            </button>
+          </>
+        ) : confirming ? (
+          <div className="confirm" role="group" aria-label="Confirm closing early">
+            <p>
+              Close trial {trial.number} on day {day} of {trial.lengthDays}? Next you choose keep, cut, or extend for
+              each experiment. Nothing closes until you confirm there.
+            </p>
+            <div className="confirm-actions">
+              <button type="button" className="btn btn-primary" onClick={() => go({ name: "verdict" })}>
+                Choose verdicts
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setConfirming(false)}>
+                Keep going
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p className="hint">Three weeks is a plan, not a rule. If you already know, you can decide now.</p>
+            <button type="button" className="btn btn-secondary" onClick={() => setConfirming(true)}>
+              Close trial early
+            </button>
+          </>
+        )}
       </section>
     </main>
   );

@@ -81,6 +81,61 @@ describe("computeWeights", () => {
   });
 });
 
+describe("computeWeights, spec checks", () => {
+  it("adds a fractional fairness deficit", () => {
+    // Four days behind, three experiments: expected 4/3 each.
+    const w = computeWeights(base({ dayIndex: 4, timesDrawn: { a: 2, b: 1, c: 1 } }));
+    expect(w).toEqual({ a: 1, b: 1.167, c: 1.167 });
+  });
+
+  it("counts a never-drawn experiment as fully behind", () => {
+    const w = computeWeights(base({ dayIndex: 9, timesDrawn: { a: 5, b: 4 } }));
+    // expected 3: a and b are ahead, c is 3 behind.
+    expect(w).toEqual({ a: 1, b: 1, c: 2.5 });
+  });
+
+  it("boosts only below the floor, not at it", () => {
+    const w = computeWeights(base({ floorPerWeek: 1, sessionsThisWeek: { a: 0, b: 1, c: 2 } }));
+    expect(w).toEqual({ a: 2, b: 1, c: 1 });
+  });
+
+  it("applies the yesterday factor before the additive boosts", () => {
+    const w = computeWeights(base({ drawnYesterday: "a", sessionsThisWeek: { b: 5, c: 5 } }));
+    expect(w.a).toBe(1.4);
+  });
+
+  it("zero-weights non-portable experiments in travel even when they are behind", () => {
+    const w = computeWeights(
+      base({ season: "travel", dayIndex: 6, timesDrawn: { a: 6 }, sessionsThisWeek: {}, floorPerWeek: 1 }),
+    );
+    expect(w).toEqual({ a: 2, b: 0, c: 0 });
+  });
+
+  it("never draws a resting experiment in travel", () => {
+    const ctx = base({ season: "travel" });
+    for (const r of [0, 0.25, 0.5, 0.75, 0.999]) expect(drawExperiment(ctx, () => r)?.experimentId).toBe("a");
+  });
+
+  it("draws uniformly when travel zeroes everything", () => {
+    const ctx = base({
+      season: "travel",
+      drawnYesterday: "b",
+      experiments: [
+        { id: "b", portable: false },
+        { id: "c", portable: false },
+      ],
+    });
+    expect(drawExperiment(ctx, () => 0.49)).toEqual({ experimentId: "b", weights: { b: 1, c: 1 } });
+    expect(drawExperiment(ctx, () => 0.51)?.experimentId).toBe("c");
+  });
+
+  it("gives newborn the same weights with the same floor", () => {
+    const ctx = base({ drawnYesterday: "c", dayIndex: 5, timesDrawn: { a: 1, c: 3 }, sessionsThisWeek: { a: 0 } });
+    expect(computeWeights({ ...ctx, season: "newborn" })).toEqual(computeWeights(ctx));
+    expect(computeWeights({ ...ctx, season: "newborn" })).toEqual({ a: 2.333, b: 2.833, c: 1.4 });
+  });
+});
+
 describe("pickWeighted", () => {
   const weights = { a: 1, b: 2, c: 1 };
 

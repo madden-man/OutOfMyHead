@@ -11,6 +11,7 @@ interface SeedExperiment {
   tests: string;
   unit: string;
   portable: boolean;
+  source?: string;
 }
 
 const STREAM_SET = new Set<string>(["writing", "piano", "production"]);
@@ -23,7 +24,7 @@ function isStream(value: string): value is Stream {
 export function seedExperiments(): Experiment[] {
   return (seed as SeedExperiment[]).map((s) => {
     if (!isStream(s.stream)) throw new Error(`Seed ${s.id} has unknown stream ${s.stream}`);
-    return {
+    const row: Experiment = {
       id: nanoid(),
       seedId: s.id,
       stream: s.stream,
@@ -35,6 +36,8 @@ export function seedExperiments(): Experiment[] {
       custom: false,
       archived: false,
     };
+    if (s.source) row.source = s.source;
+    return row;
   });
 }
 

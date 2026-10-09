@@ -31,6 +31,7 @@ interface Experiment {
   tests: string;            // what this experiment tests
   unit: string;             // the minimum unit, e.g. "one 100-word fragment"
   portable: boolean;        // can it come on a trip
+  source?: string;          // where the idea comes from (seed experiments)
   custom: boolean;          // user-authored
   archived: boolean;
 }
@@ -45,6 +46,7 @@ interface Trial {
   experimentIds: string[];  // 2..4 active experiments
   status: "active" | "closed";
   verdicts?: Record<string, "keep" | "cut" | "extend">;
+  replacements?: Record<string, string>;   // cut experimentId -> the experiment that replaced it
   closedAt?: string;
 }
 
@@ -88,6 +90,7 @@ interface Settings {
   floorPerWeek: Record<Season, number>;   // sessions per experiment per week; default normal 2, travel 1, newborn 0
   nudgeTime?: string;                     // "HH:MM" local, optional single daily nudge
   onboarded: boolean;
+  seasonLog?: { date: string; season: Season }[];  // season changes, so past weeks keep their floor
 }
 ```
 
@@ -121,11 +124,16 @@ A second session on the same day on any experiment is free choice and gets origi
 - The app only reports cleared or not cleared. Sessions above the floor display as bonus, never as a missed target.
 - Streaks count consecutive weeks where every active experiment cleared its floor. Newborn weeks never break a streak.
 - Season is a global setting with three values. Travel surfaces portable experiments and zero-weights the rest. Newborn drops the floor to 0 and hides Pass.
+- Season changes are logged by date in `Settings.seasonLog` so a past week is judged by the season it actually had. If the season changed during a week, the lowest floor among those seasons applies, and any newborn day makes the whole week a newborn week.
+- Newborn weeks are neutral for streaks: they neither break nor extend one. Only completed weeks count toward a streak; the current week joins once it ends. Streaks are per trial.
+- In a travel week, non-portable experiments are resting and have no floor (they cannot be drawn, so they are never measured against one).
+- A planned length that is not a multiple of 7 ends on a short week whose floor scales with its length, rounded up. A trial that runs past its length continues in full 7-day weeks.
+- The floor per season is editable from 0 to 7.
 
 ## Trial lifecycle
 
 - A trial has 2 to 4 experiments and a length (default 21 days).
-- On the last day, or any time after via "Close trial early", the Today screen turns into the verdict flow: for each experiment, the stats strip plus Keep, Cut, or Extend. Cut opens the library to pick a replacement. Confirming closes the trial and opens the next one with kept and new experiments. Extend keeps the experiment with its history visible in the new trial.
+- On the last day (and after), Today shows "Close this trial". The Trial screen offers "Close trial early" at any time, behind an in-page confirm. Both open the verdict screen: for each experiment, the stats strip plus Keep, Cut, or Extend. Cut opens the library to pick a replacement. Every cut needs a replacement, so the next trial has as many experiments as this one. Confirming closes the trial (status, verdicts, replacements, closedAt) and opens the next one, starting today with the default length, with kept, extended, and replacement experiments in the old order. Extend keeps the experiment with its history visible in the new trial (marked "Extended from trial N" on the Trial screen; next notes carry across trials).
 - Closed trials remain readable in Review.
 
 ## Screens
@@ -144,6 +152,8 @@ Scaffold, domain model, Dexie schema, seed import on first run, onboarding (pick
 
 ### Phase 2: the signal
 Weighted draw with fairness and floor boosts, weekly floor strip, streaks by week, seasons (travel filter, newborn mode), verdict flow and trial rollover, the optional single daily nudge (Notification API, permission asked only when the user sets a time), Settings screen. Integration tests: weights behave per spec with an injected RNG; travel zero-weights non-portable; newborn hides Pass and never breaks a streak; verdict flow opens trial 2 with the right experiments.
+
+The nudge fires only while the app is open (no service worker push yet). The app checks the clock every 15 seconds and on visibility change, and fires once per day from the chosen minute through a 10-minute grace window, so a throttled background tab still gets it but opening the app hours later does not fire a stale nudge.
 
 ### Phase 3: the payoff
 Attachments (text, image, audio) stored in Dexie, work grid in Review, review charts and table view, export JSON and Markdown, PWA manifest + service worker (vite-plugin-pwa) for offline install, custom experiments, archive. Integration tests: attachments round-trip; export contains every session; review numbers match a hand-computed fixture.
