@@ -179,6 +179,29 @@ describe("Out of My Head", () => {
     expect(session?.origin).toBe("rerolled");
   });
 
+  it("Reroll draws from the trial as it stands, not the roster at draw time", async () => {
+    setToday(2026, 10, 8);
+    setRandom(0);
+    const app = await onboard();
+    expect(await drawnName()).toBe(WORLD);
+
+    await app.user.click(screen.getByRole("button", { name: "Library" }));
+    await screen.findByRole("heading", { level: 1, name: "Library" });
+    await app.user.click(screen.getByRole("button", { name: `Remove ${TUNE} from trial` }));
+    await app.user.click(await screen.findByRole("button", { name: "Add Erasure to trial" }));
+    await screen.findByText(/3 of 4 in this trial/);
+
+    await app.user.click(screen.getByRole("button", { name: "Today" }));
+    await app.user.click(await inDrawCard().findByRole("button", { name: "Reroll" }));
+    await waitFor(async () => expect(await drawnName()).toBe(UGLY));
+
+    const [draw] = await db.draws.toArray();
+    const byName = new Map((await db.experiments.toArray()).map((e) => [e.name, e.id]));
+    expect(Object.keys(draw?.weights ?? {}).sort()).toEqual(
+      [byName.get(WORLD), byName.get(UGLY), byName.get("Erasure")].sort(),
+    );
+  });
+
   it("Library caps the trial at 4 active experiments", async () => {
     setToday(2026, 10, 8);
     setRandom(0);
@@ -247,6 +270,31 @@ describe("Out of My Head", () => {
     expect(today?.querySelector(".mark-session")).not.toBeNull();
     expect(today?.querySelector(".mark-pass")).not.toBeNull();
     expect(days[1]).toHaveClass("is-future");
+  });
+
+  it("Trial keeps drawing the grid past the planned length, in full weeks", async () => {
+    setToday(2026, 10, 8);
+    setRandom(0);
+    const app = await onboard();
+    await drawnName();
+    app.unmount();
+
+    // Day 25: four days past the planned 21.
+    setToday(2026, 11, 1);
+    const { user } = renderApp();
+    expect(await screen.findByRole("heading", { level: 1, name: "Day 25" })).toBeInTheDocument();
+    await drawnName();
+    await user.click(screen.getByRole("button", { name: "Trial" }));
+    expect(await screen.findByText(/Day 25, past the planned 21\./)).toBeInTheDocument();
+    expect(screen.queryByText(/last planned day/)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "The 25 days so far" })).toBeInTheDocument();
+    const days = screen.getAllByRole("listitem").filter((li) => li.classList.contains("day"));
+    expect(days).toHaveLength(28);
+    expect(days[24]).toHaveClass("is-today", "is-drawn");
+    expect(days[27]).toHaveClass("is-future");
+
+    await user.click(screen.getByRole("button", { name: "Review" }));
+    expect(await screen.findByText(/day 25, 21 planned\./)).toBeInTheDocument();
   });
 });
 

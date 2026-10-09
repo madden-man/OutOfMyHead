@@ -3,8 +3,27 @@ import { MAX_ATTACHMENT_BYTES, attachmentMeta, checkAttachmentFile, formatBytes 
 
 describe("checkAttachmentFile", () => {
   it("accepts images and audio up to 25 MB", () => {
-    expect(checkAttachmentFile({ type: "image/jpeg", size: 10 })).toEqual({ ok: true, kind: "image" });
-    expect(checkAttachmentFile({ type: "audio/mp4", size: MAX_ATTACHMENT_BYTES })).toEqual({ ok: true, kind: "audio" });
+    expect(checkAttachmentFile({ type: "image/jpeg", size: 10 })).toEqual({ ok: true, kind: "image", mime: "image/jpeg" });
+    expect(checkAttachmentFile({ type: "audio/mp4", size: MAX_ATTACHMENT_BYTES })).toEqual({
+      ok: true,
+      kind: "audio",
+      mime: "audio/mp4",
+    });
+  });
+
+  it("falls back to the extension when the picker gives no type", () => {
+    expect(checkAttachmentFile({ type: "", size: 10, name: "Voice 012.OPUS" })).toEqual({
+      ok: true,
+      kind: "audio",
+      mime: "audio/ogg",
+    });
+    expect(checkAttachmentFile({ type: "", size: 10, name: "IMG_0042.heic" })).toEqual({
+      ok: true,
+      kind: "image",
+      mime: "image/heic",
+    });
+    expect(checkAttachmentFile({ type: "", size: 10, name: "notes.txt" }).ok).toBe(false);
+    expect(checkAttachmentFile({ type: "", size: 10 }).ok).toBe(false);
   });
 
   it("rejects other types and anything over 25 MB with a sentence", () => {

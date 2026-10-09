@@ -86,7 +86,9 @@ export function Verdict({
         </button>
         <h1 className="screen-title">Close trial {trial.number}</h1>
         <p className="lede">
-          {day >= trial.lengthDays
+          {day > trial.lengthDays
+            ? `${day} days done, ${trial.lengthDays} planned.`
+            : day === trial.lengthDays
             ? `${trial.lengthDays} days done.`
             : `Closing on day ${day} of ${trial.lengthDays}.`}{" "}
           Look at what pulled you back, then decide what comes into trial {nextNumber}.

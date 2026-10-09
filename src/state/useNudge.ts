@@ -3,9 +3,10 @@ import { toLocalISODate } from "../domain/dates";
 import { nudgeDue } from "../domain/nudge";
 import { now } from "../lib/clock";
 import { showNudge } from "../lib/notify";
+import { STORAGE_PREFIX } from "./actions";
 
 export const NUDGE_CHECK_MS = 15_000;
-const LAST_FIRED_KEY = "oomh.nudge.lastFired";
+const LAST_FIRED_KEY = `${STORAGE_PREFIX}nudge.lastFired`;
 
 function readLastFired(): string | undefined {
   try {

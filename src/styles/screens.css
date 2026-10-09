@@ -1005,8 +1005,9 @@
 .library .filters .chips {
   flex-wrap: nowrap;
   overflow-x: auto;
-  padding: 2px;
-  margin: -2px;
+  /* Room for the 2px focus ring and its 2px offset, which the scroller would clip. */
+  padding: 4px;
+  margin: -4px;
   scrollbar-width: none;
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { StreamTag } from "../components/StreamTag";
 import { BlobImage } from "../components/BlobMedia";
-import { checkAttachmentFile, formatBytes } from "../domain/attachments";
+import { attachmentMime, checkAttachmentFile, formatBytes } from "../domain/attachments";
 import { PULL_LABELS, type Pull } from "../domain/types";
 import { now } from "../lib/clock";
 import { logSession } from "../state/actions";
@@ -289,7 +289,7 @@ export function LogSession({
 }
 
 function FilePreview({ file, onRemove }: { file: File; onRemove: () => void }) {
-  const isImage = file.type.startsWith("image/");
+  const isImage = attachmentMime(file).startsWith("image/");
   return (
     <div className="file-preview">
       {isImage && <BlobImage className="file-preview-image" blob={file} alt={`Preview of ${file.name}`} />}

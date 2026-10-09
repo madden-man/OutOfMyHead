@@ -3,7 +3,7 @@ import type { Route } from "../App";
 import { FloorStrip } from "../components/FloorStrip";
 import { StreamTag } from "../components/StreamTag";
 import { dateOfTrialDay, parseLocalISODate, trialDayIndex } from "../domain/dates";
-import { floorStrip, streakWeeks } from "../domain/floor";
+import { floorStrip, streakWeeks, trialWeeks } from "../domain/floor";
 import type { Experiment } from "../domain/types";
 import type { AppState } from "../state/useAppStore";
 
@@ -30,11 +30,11 @@ export function TrialScreen({ state, today, go }: { state: AppState; today: stri
   const extended = (id: string) => previous?.verdicts?.[id] === "extend";
   const lastDayReached = day >= trial.lengthDays;
 
-  const weeks: number[][] = [];
-  for (let d = 1; d <= trial.lengthDays; d++) {
-    const w = Math.floor((d - 1) / 7);
-    (weeks[w] ??= []).push(d);
-  }
+  // The planned weeks, plus full weeks after them while the trial runs over.
+  const weeks = trialWeeks(trial, today).map((w) =>
+    Array.from({ length: w.days }, (_, i) => w.firstDay + i),
+  );
+  const overrun = day > trial.lengthDays;
 
   return (
     <main className="screen trial">
@@ -43,7 +43,9 @@ export function TrialScreen({ state, today, go }: { state: AppState; today: stri
         <h1 className="screen-title">Trial {trial.number}</h1>
         <p className="lede">
           Started {formatDate(trial.startDate)}.{" "}
-          {remaining === 0
+          {overrun
+            ? `Day ${day}, past the planned ${trial.lengthDays}.`
+            : remaining === 0
             ? "This is the last planned day."
             : remaining === 1
               ? "1 day remaining."
@@ -93,7 +95,7 @@ export function TrialScreen({ state, today, go }: { state: AppState; today: stri
 
       <section aria-labelledby="grid-title">
         <h2 id="grid-title" className="section-title">
-          The {trial.lengthDays} days
+          {overrun ? `The ${day} days so far` : `The ${trial.lengthDays} days`}
         </h2>
         <div className="day-grid" role="list">
           {weeks.map((days, i) => (

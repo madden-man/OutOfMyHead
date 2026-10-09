@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { db } from "../db/db";
 import { buildDrawContext } from "../domain/drawContext";
-import { drawExperiment, rerollExperiment } from "../domain/draw";
+import { computeWeights, drawExperiment, rerollExperiment, type DrawContext } from "../domain/draw";
 import { checkAttachmentFile } from "../domain/attachments";
 import { sessionOrigin } from "../domain/origin";
 import { clampFloor, withSeason } from "../domain/seasons";
@@ -53,6 +53,24 @@ export async function startFirstTrial(experimentIds: string[]): Promise<Trial> {
   });
 }
 
+/** The draw context for `date` from stored rows. Call inside a transaction over those tables. */
+async function drawContextFor(trial: Trial, date: string): Promise<DrawContext> {
+  const [experiments, draws, sessions, settings] = await Promise.all([
+    db.experiments.bulkGet(trial.experimentIds),
+    db.draws.where("trialId").equals(trial.id).toArray(),
+    db.sessions.where("trialId").equals(trial.id).toArray(),
+    db.settings.get("settings"),
+  ]);
+  return buildDrawContext({
+    trial,
+    experiments: experiments.filter((e) => e !== undefined),
+    draws,
+    sessions,
+    settings: settings ?? DEFAULT_SETTINGS,
+    today: date,
+  });
+}
+
 /**
  * The draw locks per calendar day per trial. If today has a draw, return it.
  * Otherwise compute one and store it. Transactional, so a double call is safe.
@@ -64,21 +82,7 @@ export async function ensureTodayDraw(trialId: string): Promise<Draw | undefined
     if (existing) return existing;
     const trial = await db.trials.get(trialId);
     if (!trial || trial.status !== "active") return undefined;
-    const [experiments, draws, sessions, settings] = await Promise.all([
-      db.experiments.bulkGet(trial.experimentIds),
-      db.draws.where("trialId").equals(trialId).toArray(),
-      db.sessions.where("trialId").equals(trialId).toArray(),
-      db.settings.get("settings"),
-    ]);
-    const ctx = buildDrawContext({
-      trial,
-      experiments: experiments.filter((e) => e !== undefined),
-      draws,
-      sessions,
-      settings: settings ?? DEFAULT_SETTINGS,
-      today: date,
-    });
-    const result = drawExperiment(ctx, rng);
+    const result = drawExperiment(await drawContextFor(trial, date), rng);
     if (!result) return undefined;
     const draw: Draw = { id: nanoid(), trialId, date, experimentId: result.experimentId, weights: result.weights };
     await db.draws.add(draw);
@@ -95,14 +99,28 @@ export async function passTo(drawId: string, experimentId: string): Promise<void
   });
 }
 
-/** Reroll once per day, from the remaining experiments. Not a pass. */
+/**
+ * Reroll once per day, from the remaining experiments. Not a pass. The pool is
+ * the trial as it stands now: an experiment removed since the draw is out, and
+ * one added since the draw comes in at the weight it would have had this
+ * morning. The stored weights are updated to match, so "Why this one" agrees.
+ */
 export async function rerollDraw(drawId: string): Promise<void> {
-  await db.transaction("rw", db.draws, async () => {
+  await db.transaction("rw", [db.draws, db.trials, db.sessions, db.experiments, db.settings], async () => {
     const draw = await db.draws.get(drawId);
     if (!draw || draw.rerolledFrom || draw.passedTo) return;
-    const next = rerollExperiment(draw.weights, draw.experimentId, rng);
+    const trial = await db.trials.get(draw.trialId);
+    if (!trial || trial.status !== "active") return;
+    const missing = trial.experimentIds.some((id) => draw.weights[id] === undefined);
+    const fresh = missing ? computeWeights(await drawContextFor(trial, draw.date)) : {};
+    const weights: Record<string, number> = {};
+    for (const id of trial.experimentIds) {
+      const w = draw.weights[id] ?? fresh[id];
+      if (w !== undefined) weights[id] = w;
+    }
+    const next = rerollExperiment(weights, draw.experimentId, rng);
     if (!next) return;
-    await db.draws.update(drawId, { experimentId: next, rerolledFrom: draw.experimentId });
+    await db.draws.update(drawId, { experimentId: next, rerolledFrom: draw.experimentId, weights });
   });
 }
 
@@ -143,7 +161,7 @@ export async function logSession(input: SessionInput): Promise<Session> {
     if (input.file) {
       const check = checkAttachmentFile(input.file);
       if (!check.ok) throw new Error(check.message);
-      const attachment: Attachment = { kind: check.kind, blob: input.file, mime: input.file.type };
+      const attachment: Attachment = { kind: check.kind, blob: input.file, mime: check.mime };
       if (input.file.name) attachment.name = input.file.name;
       if (snippet) attachment.text = snippet;
       session.attachment = attachment;
@@ -336,8 +354,20 @@ export async function deleteExperiment(experimentId: string): Promise<DeleteResu
   });
 }
 
-/** Delete the whole local database. The caller reloads to land on onboarding. */
+/** Every localStorage key the app writes starts with this, so reset can find them all. */
+export const STORAGE_PREFIX = "oomh.";
+
+/**
+ * Delete the whole local database and the app's localStorage keys (the
+ * nudge's last-fired date). The caller reloads to land on onboarding.
+ */
 export async function resetAllData(): Promise<void> {
   // Keep auto-open so live queries see an empty store until the reload.
   await db.delete({ disableAutoOpen: false });
+  try {
+    const keys = Array.from({ length: window.localStorage.length }, (_, i) => window.localStorage.key(i));
+    for (const key of keys) if (key?.startsWith(STORAGE_PREFIX)) window.localStorage.removeItem(key);
+  } catch {
+    // Storage can be blocked; there is nothing stored to clear then.
+  }
 }

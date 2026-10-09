@@ -12,6 +12,12 @@ import type { AppState } from "../state/useAppStore";
 const shortDate = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
 const formatDate = (iso: string) => shortDate.format(parseLocalISODate(iso));
 
+/** "day 5 of 21", or "day 25, 21 planned" once a trial runs past its length. */
+function dayOf(day: number, length: number): string {
+  const d = Math.max(1, day);
+  return d > length ? `day ${d}, ${length} planned` : `day ${d} of ${length}`;
+}
+
 const plural = (n: number, one: string, many: string) => (n === 1 ? `1 ${one}` : `${n} ${many}`);
 
 function trialOption(t: Trial, today: string): string {
@@ -80,7 +86,7 @@ export function Review({ state, today }: { state: AppState; today: string }) {
         </select>
         <p className="hint">
           {trial.status === "active"
-            ? `Started ${formatDate(trial.startDate)}, day ${Math.max(1, trialDayIndex(trial.startDate, today))} of ${trial.lengthDays}.`
+            ? `Started ${formatDate(trial.startDate)}, ${dayOf(trialDayIndex(trial.startDate, today), trial.lengthDays)}.`
             : `Ran ${formatDate(trial.startDate)} to ${formatDate(asOf)}.`}
         </p>
       </div>

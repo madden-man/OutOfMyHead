@@ -49,4 +49,31 @@ describe("seed import", () => {
     expect((await v2.experiments.get("x2"))?.source).toBeUndefined();
     await v2.delete();
   });
+
+  it("opens a populated version 2 database with its rows and blobs intact", async () => {
+    const name = "reopen-v2";
+    const first = new OutOfMyHeadDB(name);
+    const blob = new Blob(["png bytes"], { type: "image/png" });
+    await first.sessions.add({
+      id: "s1",
+      trialId: "t1",
+      experimentId: "x1",
+      date: "2026-10-08",
+      startedAt: "2026-10-08T08:00:00.000Z",
+      minutes: 10,
+      pull: 4,
+      thoughtAboutIt: true,
+      origin: "drawn",
+      nextNote: "Keep going",
+      attachment: { kind: "image", blob, mime: "image/png", name: "a.png" },
+    });
+    first.close();
+
+    const again = new OutOfMyHeadDB(name);
+    expect(again.verno).toBe(2);
+    const row = await again.sessions.get("s1");
+    expect(row?.nextNote).toBe("Keep going");
+    expect(row?.attachment?.blob?.size).toBe(blob.size);
+    await again.delete();
+  });
 });

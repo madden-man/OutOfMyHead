@@ -38,6 +38,11 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg,png,webmanifest}"],
         navigateFallback: "index.html",
         cleanupOutdatedCaches: true,
+        // Take over at once: the first visit is controlled (offline-ready and
+        // able to show the nudge through the worker) without a second load, and
+        // an update activates straight away so registerSW can reload onto it.
+        skipWaiting: true,
+        clientsClaim: true,
         // Fonts come from Google; keep them after the first online visit so offline looks the same.
         runtimeCaching: [
           {

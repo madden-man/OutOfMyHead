@@ -272,6 +272,7 @@ select {
 
 .btn-link {
   min-height: var(--tap);
+  min-width: var(--tap);
   padding: 10px 0;
   background: none;
   border: 0;

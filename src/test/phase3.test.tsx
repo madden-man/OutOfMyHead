@@ -148,9 +148,13 @@ describe("Phase 3: export and reset", () => {
     await app.user.click(within(confirm).getByRole("button", { name: "Keep my data" }));
     expect(await db.trials.count()).toBe(1);
 
+    window.localStorage.setItem("oomh.nudge.lastFired", "2026-10-08");
+    window.localStorage.setItem("not-ours", "kept");
     await app.user.click(screen.getByRole("button", { name: "Reset all data" }));
     await app.user.click(screen.getByRole("button", { name: "Delete everything" }));
     await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    expect(window.localStorage.getItem("oomh.nudge.lastFired")).toBeNull();
+    expect(window.localStorage.getItem("not-ours")).toBe("kept");
     expect(await db.trials.count()).toBe(0);
     expect(await db.sessions.count()).toBe(0);
 
