@@ -1,6 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { db } from "../db/db";
+import { setClock } from "../lib/clock";
 import { addToTrial } from "../state/actions";
 import { TUNE, UGLY, WORLD, drawnName, inDrawCard, onboard, renderApp, setRandom, setToday } from "./helpers";
 
@@ -109,6 +110,28 @@ describe("Out of My Head", () => {
       nextNote: "Describe the ferry at night",
       attachment: { kind: "text", text: "The ferryman counts in a language nobody else remembers." },
     });
+  });
+
+  it("a timed session that crosses midnight is dated the day it started", async () => {
+    setToday(2026, 10, 8, 23);
+    setClock(() => new Date(2026, 9, 8, 23, 50, 0));
+    setRandom(0);
+    const { user } = await onboard();
+    expect(await drawnName()).toBe(WORLD);
+
+    await user.click(inDrawCard().getByRole("button", { name: "Start session" }));
+    await screen.findByRole("heading", { level: 1, name: "Log session" });
+    await user.click(screen.getByRole("button", { name: "Start timer" }));
+    // Saved fifteen minutes later, after midnight.
+    setClock(() => new Date(2026, 9, 9, 0, 5, 0));
+    await user.click(screen.getByRole("radio", { name: "Fine" }));
+    await user.click(screen.getByRole("radio", { name: "No" }));
+    await user.click(screen.getByRole("button", { name: "Save session" }));
+    await screen.findByRole("heading", { level: 1, name: /Day \d+ of 21/ });
+
+    const [session] = await db.sessions.toArray();
+    // Dated the 8th, and its origin comes from the 8th's draw.
+    expect(session).toMatchObject({ date: "2026-10-08", minutes: 15, origin: "drawn" });
   });
 
   it("an unprompted session on another experiment shows its note in the list below", async () => {

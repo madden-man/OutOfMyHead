@@ -195,7 +195,7 @@ export function Today({ state, today, go }: { state: AppState; today: string; go
               </p>
               <FloorStrip
                 label={`Weekly floor for ${e.name}`}
-                pills={floorStrip({ trial, sessions, settings, today, experiment: e })}
+                pills={floorStrip({ trial, sessions, draws, settings, today, experiment: e })}
               />
             </li>
           ))}

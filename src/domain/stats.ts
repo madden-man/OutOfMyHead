@@ -16,12 +16,15 @@ export interface ExperimentStats {
   /** Days the draw landed on this experiment and the user passed to another. */
   passes: number;
   daysDrawn: number;
-  /** Weeks so far (completed or current) where the experiment cleared a floor above 0. */
+  /**
+   * Weeks so far (completed or current) where the experiment was in the trial
+   * and cleared a floor above 0. Membership comes from each week's draws.
+   */
   floorWeeksCleared: number;
 }
 
 export interface StatsInput {
-  trial: Pick<Trial, "id" | "startDate" | "lengthDays">;
+  trial: Pick<Trial, "id" | "startDate" | "lengthDays" | "experimentIds">;
   sessions: readonly Session[];
   draws: readonly Draw[];
   settings: Settings;
@@ -43,7 +46,7 @@ export function experimentStats(input: StatsInput & { experiment: { id: string; 
     thoughtAboutItRate: n === 0 ? null : round(mine.filter((s) => s.thoughtAboutIt).length / n, 3),
     passes: drawn.filter((d) => d.passedTo !== undefined && d.passedTo !== experiment.id).length,
     daysDrawn: drawn.length,
-    floorWeeksCleared: weeks.filter((week) => clearedWeek({ trial, sessions, settings, today, experiment, week }))
+    floorWeeksCleared: weeks.filter((week) => clearedWeek({ trial, sessions, draws, settings, today, experiment, week }))
       .length,
   };
 }

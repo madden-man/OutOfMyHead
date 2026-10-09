@@ -1,5 +1,6 @@
-import { useRef, useState, type CSSProperties, type FocusEvent, type MouseEvent, type ReactNode } from "react";
+import type { CSSProperties } from "react";
 import type { Stream } from "../domain/types";
+import { useTooltip } from "./useTooltip";
 
 // Plain HTML charts. Bars are at most 24px thick with a 4px rounded data end
 // and a square baseline, colored by stream. Text always wears text tokens.
@@ -9,48 +10,6 @@ export interface ChartRow {
   id: string;
   name: string;
   stream: Stream;
-}
-
-interface Tip {
-  key: string;
-  text: string;
-  x: number;
-  y: number;
-}
-
-/** One positioned tooltip per chart, shown on hover and on keyboard focus. */
-function useTooltip(tipId: string) {
-  const box = useRef<HTMLDivElement>(null);
-  const [tip, setTip] = useState<Tip | null>(null);
-
-  const show = (key: string, text: string, el: HTMLElement) => {
-    const container = box.current;
-    if (!container) return;
-    const outer = container.getBoundingClientRect();
-    const r = el.getBoundingClientRect();
-    const width = outer.width || 1;
-    // Center over the mark, kept inside the chart so the tooltip never clips.
-    const x = Math.min(Math.max(r.left - outer.left + r.width / 2, 90), Math.max(90, width - 90));
-    setTip({ key, text, x, y: r.top - outer.top });
-  };
-  const hide = (key: string) => setTip((t) => (t && t.key === key ? null : t));
-
-  const bind = (key: string, text: string) => ({
-    tabIndex: 0,
-    "aria-describedby": tip?.key === key ? tipId : undefined,
-    onMouseEnter: (e: MouseEvent<HTMLElement>) => show(key, text, e.currentTarget),
-    onMouseLeave: () => hide(key),
-    onFocus: (e: FocusEvent<HTMLElement>) => show(key, text, e.currentTarget),
-    onBlur: () => hide(key),
-  });
-
-  const layer: ReactNode = tip ? (
-    <div id={tipId} role="tooltip" className="chart-tooltip" style={{ left: tip.x, top: tip.y }}>
-      {tip.text}
-    </div>
-  ) : null;
-
-  return { box, bind, layer };
 }
 
 export function ChartLegend({ rows }: { rows: readonly ChartRow[] }) {

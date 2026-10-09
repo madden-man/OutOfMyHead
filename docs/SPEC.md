@@ -155,6 +155,10 @@ Weighted draw with fairness and floor boosts, weekly floor strip, streaks by wee
 
 The nudge fires only while the app is open (no service worker push yet). The app checks the clock every 15 seconds and on visibility change, and fires once per day from the chosen minute through a 10-minute grace window, so a throttled background tab still gets it but opening the app hours later does not fire a stale nudge.
 
+As built, with these deliberate choices:
+
+- Past weeks are judged against the roster the trial had then, not today's. Each stored draw's `weights` keys record which experiments were in the trial that day, so an experiment counts as in the trial during a week when it appears in the weights of at least one draw dated inside that week. A week with no draws falls back to the current roster, and the week in progress also includes the current roster, so an experiment added after today's draw belongs to this week. This applies to streaks, the floor strip, and floor weeks cleared in stats and Review. An experiment added mid-trial shows blank pills for the weeks before it joined ("not in the trial yet") and never counts against the streak for them. One removed from the trial still needs its floor in the weeks it was in, and those weeks still count in its Review history.
+
 ### Phase 3: the payoff
 Attachments (text, image, audio) stored in Dexie, work grid in Review, review charts and table view, export JSON and Markdown, PWA manifest + service worker (vite-plugin-pwa) for offline install, custom experiments, archive. Integration tests: attachments round-trip; export contains every session; review numbers match a hand-computed fixture.
 

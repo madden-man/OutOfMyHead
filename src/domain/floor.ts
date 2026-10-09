@@ -1,6 +1,6 @@
 import { dateOfTrialDay, trialDayIndex } from "./dates";
 import { seasonsDuring } from "./seasons";
-import type { Season, Session, Settings, Trial } from "./types";
+import type { Draw, Season, Session, Settings, Trial } from "./types";
 
 // Weekly floor, derived from sessions. The app only ever reports cleared or
 // not yet cleared. Sessions above the floor are bonus. Nothing here is a miss.
@@ -101,7 +101,32 @@ export function sessionsInWeek(
   return n;
 }
 
-export type PillKind = "cleared" | "progress" | "done" | "future";
+/**
+ * Which experiments were in the trial during a week. Each draw stores the
+ * weights it used, keyed by every experiment in the trial that day, so the
+ * union of those keys over the week's draws is the roster the week had. A
+ * week with no draws (or only draws without weights) falls back to the
+ * trial's roster as it stands. The week in progress also includes today's
+ * roster, so an experiment added after today's draw belongs to this week.
+ */
+export function weekRoster(
+  trial: Pick<Trial, "id" | "experimentIds">,
+  draws: readonly Draw[],
+  week: TrialWeek,
+  today: string,
+): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const d of draws) {
+    if (d.trialId !== trial.id || d.date < week.startDate || d.date > week.endDate) continue;
+    for (const id of Object.keys(d.weights)) ids.add(id);
+  }
+  if (ids.size === 0 || weekPhase(week, today) === "current") {
+    for (const id of trial.experimentIds) ids.add(id);
+  }
+  return ids;
+}
+
+export type PillKind = "cleared" | "progress" | "done" | "future" | "absent";
 
 export interface WeekPill {
   week: number;
@@ -123,11 +148,16 @@ export function weekPill(input: {
   count: number;
   floor: number;
   today: string;
+  /** The experiment was not in the trial that week. */
+  absent?: boolean;
 }): WeekPill {
   const { week, count, floor, today } = input;
   const phase = weekPhase(week, today);
   const base = { week: week.week, phase, count, floor, bonus: 0 };
   const name = `Week ${week.week}`;
+  if (input.absent) {
+    return { ...base, kind: "absent", label: "", description: `${name}, not in the trial yet` };
+  }
   if (phase === "future") {
     return { ...base, kind: "future", label: "", description: `${name}, not started` };
   }
@@ -166,48 +196,59 @@ export function weekPill(input: {
 }
 
 export interface FloorInput {
-  trial: Pick<Trial, "id" | "startDate" | "lengthDays">;
+  trial: Pick<Trial, "id" | "startDate" | "lengthDays" | "experimentIds">;
   sessions: readonly Session[];
+  /** The trial's draws, whose weights record the roster each day. */
+  draws: readonly Draw[];
   settings: Settings;
   today: string;
 }
 
-/** The weekly floor strip for one experiment: one pill per trial week. */
+/**
+ * The weekly floor strip for one experiment: one pill per trial week. Weeks
+ * before the experiment joined the trial are blank.
+ */
 export function floorStrip(input: FloorInput & { experiment: { id: string; portable: boolean } }): WeekPill[] {
-  const { trial, sessions, settings, today, experiment } = input;
+  const { trial, sessions, draws, settings, today, experiment } = input;
   return trialWeeks(trial, today).map((week) =>
     weekPill({
       week,
       count: sessionsInWeek(sessions, trial.id, experiment.id, week),
       floor: weekFloor(settings, week, today, experiment),
       today,
+      absent: !weekRoster(trial, draws, week, today).has(experiment.id),
     }),
   );
 }
 
-/** Whether one experiment cleared a floor above 0 in a week. */
+/** Whether one experiment was in the trial that week and cleared a floor above 0. */
 export function clearedWeek(
   input: FloorInput & { experiment: { id: string; portable: boolean }; week: TrialWeek },
 ): boolean {
-  const floor = weekFloor(input.settings, input.week, input.today, input.experiment);
-  return floor > 0 && sessionsInWeek(input.sessions, input.trial.id, input.experiment.id, input.week) >= floor;
+  const { trial, draws, week, today, experiment } = input;
+  if (!weekRoster(trial, draws, week, today).has(experiment.id)) return false;
+  const floor = weekFloor(input.settings, week, today, experiment);
+  return floor > 0 && sessionsInWeek(input.sessions, trial.id, experiment.id, week) >= floor;
 }
 
 /**
  * Streak in weeks: consecutive completed weeks, counting back from the most
- * recent, where every active experiment cleared its floor. Newborn weeks are
+ * recent, where every experiment in the trial that week cleared its floor.
+ * `experiments` is every experiment the trial may have had, so a week is
+ * judged by its own roster (see `weekRoster`), not today's. Newborn weeks are
  * neutral: they neither break the streak nor add to it.
  */
 export function streakWeeks(input: FloorInput & { experiments: readonly { id: string; portable: boolean }[] }): number {
-  const { trial, sessions, settings, today, experiments } = input;
+  const { trial, sessions, draws, settings, today, experiments } = input;
   if (experiments.length === 0) return 0;
   const completed = trialWeeks(trial, today).filter((w) => weekPhase(w, today) === "past");
   let streak = 0;
   for (const week of completed.reverse()) {
     if (isNewbornWeek(settings, week, today)) continue;
-    const allCleared = experiments.every(
-      (e) => sessionsInWeek(sessions, trial.id, e.id, week) >= weekFloor(settings, week, today, e),
-    );
+    const roster = weekRoster(trial, draws, week, today);
+    const allCleared = experiments
+      .filter((e) => roster.has(e.id))
+      .every((e) => sessionsInWeek(sessions, trial.id, e.id, week) >= weekFloor(settings, week, today, e));
     if (!allCleared) break;
     streak++;
   }

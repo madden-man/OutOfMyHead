@@ -3,6 +3,7 @@ import { db } from "../db/db";
 import { buildDrawContext } from "../domain/drawContext";
 import { computeWeights, drawExperiment, rerollExperiment, type DrawContext } from "../domain/draw";
 import { checkAttachmentFile } from "../domain/attachments";
+import { toLocalISODate } from "../domain/dates";
 import { sessionOrigin } from "../domain/origin";
 import { clampFloor, withSeason } from "../domain/seasons";
 import { nextRoster } from "../domain/verdict";
@@ -136,9 +137,14 @@ export interface SessionInput {
   file?: Blob & { name?: string };
 }
 
-/** Log a session for today. The origin is derived from today's draw. */
+/**
+ * Log a session. It is dated by when it started: a timed session takes the
+ * local calendar date of `startedAt`, so one begun before midnight and saved
+ * after it belongs to the earlier day. Without a timer it is dated today. The
+ * origin is derived from the draw for that date.
+ */
 export async function logSession(input: SessionInput): Promise<Session> {
-  const date = today();
+  const date = input.startedAt ? toLocalISODate(new Date(input.startedAt)) : today();
   return db.transaction("rw", [db.sessions, db.draws, db.trials], async () => {
     const trial = await getActiveTrial();
     if (!trial) throw new Error("No active trial");

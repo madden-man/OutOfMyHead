@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { Route } from "../App";
 import { FloorStrip } from "../components/FloorStrip";
 import { StreamTag } from "../components/StreamTag";
+import { useTooltip } from "../components/useTooltip";
 import { dateOfTrialDay, parseLocalISODate, trialDayIndex } from "../domain/dates";
 import { floorStrip, streakWeeks, trialWeeks } from "../domain/floor";
 import type { Experiment } from "../domain/types";
@@ -16,6 +17,7 @@ function formatDate(iso: string): string {
 export function TrialScreen({ state, today, go }: { state: AppState; today: string; go: (r: Route) => void }) {
   const { trial, trials, settings, experimentsById, draws, sessions } = state;
   const [confirming, setConfirming] = useState(false);
+  const { box: gridBox, bind: bindTip, layer: tipLayer } = useTooltip(`${useId()}-tip`);
   if (!trial || !settings) return null;
 
   const day = trialDayIndex(trial.startDate, today);
@@ -25,7 +27,10 @@ export function TrialScreen({ state, today, go }: { state: AppState; today: stri
     .filter((e): e is Experiment => e !== undefined);
   const trialSessions = sessions.filter((s) => s.trialId === trial.id);
   const drawsByDate = new Map(draws.map((d) => [d.date, d]));
-  const streak = streakWeeks({ trial, sessions, settings, today, experiments: active });
+  // Every experiment the trial has had, so each past week is judged by its own roster.
+  const everIds = new Set([...trial.experimentIds, ...draws.flatMap((d) => Object.keys(d.weights))]);
+  const ever = [...everIds].map((id) => experimentsById.get(id)).filter((e): e is Experiment => e !== undefined);
+  const streak = streakWeeks({ trial, sessions, draws, settings, today, experiments: ever });
   const previous = trials.find((t) => t.number === trial.number - 1);
   const extended = (id: string) => previous?.verdicts?.[id] === "extend";
   const lastDayReached = day >= trial.lengthDays;
@@ -85,7 +90,7 @@ export function TrialScreen({ state, today, go }: { state: AppState; today: stri
                 </p>
                 <FloorStrip
                   label={`Weekly floor for ${e.name}`}
-                  pills={floorStrip({ trial, sessions, settings, today, experiment: e })}
+                  pills={floorStrip({ trial, sessions, draws, settings, today, experiment: e })}
                 />
               </li>
             );
@@ -97,42 +102,46 @@ export function TrialScreen({ state, today, go }: { state: AppState; today: stri
         <h2 id="grid-title" className="section-title">
           {overrun ? `The ${day} days so far` : `The ${trial.lengthDays} days`}
         </h2>
-        <div className="day-grid" role="list">
-          {weeks.map((days, i) => (
-            <div key={i} className="day-week" role="listitem">
-              <p className="day-week-label">Week {i + 1}</p>
-              <ol className="day-row">
-                {days.map((d) => {
-                  const date = dateOfTrialDay(trial.startDate, d);
-                  const draw = drawsByDate.get(date);
-                  const exp = draw ? experimentsById.get(draw.experimentId) : undefined;
-                  const count = trialSessions.filter((s) => s.date === date).length;
-                  const passedTo = draw?.passedTo ? experimentsById.get(draw.passedTo) : undefined;
-                  const parts = [`Day ${d}, ${formatDate(date)}`];
-                  if (exp) parts.push(`drew ${exp.name}`);
-                  if (passedTo) parts.push(`passed to ${passedTo.name}`);
-                  if (count > 0) parts.push(count === 1 ? "1 session" : `${count} sessions`);
-                  const classes = [
-                    "day",
-                    exp ? `stream-${exp.stream} is-drawn` : "",
-                    date === today ? "is-today" : "",
-                    date > today ? "is-future" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ");
-                  return (
-                    <li key={d} className={classes} aria-label={parts.join(", ")} title={parts.join(", ")}>
-                      <span className="day-number" aria-hidden="true">
-                        {d}
-                      </span>
-                      {count > 0 && <span className="mark-session" aria-hidden="true" />}
-                      {passedTo && <span className="mark-pass" aria-hidden="true" />}
-                    </li>
-                  );
-                })}
-              </ol>
-            </div>
-          ))}
+        <div className="tip-host" ref={gridBox}>
+          <div className="day-grid" role="list">
+            {weeks.map((days, i) => (
+              <div key={i} className="day-week" role="listitem">
+                <p className="day-week-label">Week {i + 1}</p>
+                <ol className="day-row">
+                  {days.map((d) => {
+                    const date = dateOfTrialDay(trial.startDate, d);
+                    const draw = drawsByDate.get(date);
+                    const exp = draw ? experimentsById.get(draw.experimentId) : undefined;
+                    const count = trialSessions.filter((s) => s.date === date).length;
+                    const passedTo = draw?.passedTo ? experimentsById.get(draw.passedTo) : undefined;
+                    const parts = [`Day ${d}, ${formatDate(date)}`];
+                    if (exp) parts.push(`drew ${exp.name}`);
+                    if (passedTo) parts.push(`passed to ${passedTo.name}`);
+                    if (count > 0) parts.push(count === 1 ? "1 session" : `${count} sessions`);
+                    const label = parts.join(", ");
+                    const classes = [
+                      "day",
+                      exp ? `stream-${exp.stream} is-drawn` : "",
+                      date === today ? "is-today" : "",
+                      date > today ? "is-future" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ");
+                    return (
+                      <li key={d} className={classes} aria-label={label} {...bindTip(date, label)}>
+                        <span className="day-number" aria-hidden="true">
+                          {d}
+                        </span>
+                        {count > 0 && <span className="mark-session" aria-hidden="true" />}
+                        {passedTo && <span className="mark-pass" aria-hidden="true" />}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            ))}
+          </div>
+          {tipLayer}
         </div>
         <ul className="legend">
           <li>

@@ -530,6 +530,13 @@
   color: var(--color-text-secondary);
 }
 
+/* Half the 6px gap on every side, so each day has a hit area of at least 44px without overlapping its neighbors. */
+.day::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+}
+
 .day.is-drawn {
   background: var(--stream-tint);
   border-color: var(--stream-tint);
@@ -640,7 +647,27 @@
   gap: 6px;
 }
 
+/* The focusable week: a 44px tall hit area around the visible pill. */
+.floor-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 44px;
+  border-radius: 999px;
+}
+
+.floor-cell:focus-visible {
+  outline: none;
+}
+
+.floor-cell:focus-visible .floor-pill {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
 .floor-pill {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -673,7 +700,8 @@
   color: var(--color-text-secondary);
 }
 
-.floor-pill.is-future {
+.floor-pill.is-future,
+.floor-pill.is-absent {
   background: transparent;
   border-style: dashed;
 }
@@ -1247,7 +1275,8 @@
   color: var(--color-text);
 }
 
-.chart-plot {
+.chart-plot,
+.tip-host {
   position: relative;
 }
 

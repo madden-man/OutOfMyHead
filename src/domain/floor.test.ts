@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { addDays } from "./dates";
-import { clearedWeek, floorStrip, streakWeeks, trialWeeks, weekFloor, weekPill, type TrialWeek } from "./floor";
+import { clearedWeek, floorStrip, streakWeeks, trialWeeks, weekFloor, weekPill, weekRoster, type TrialWeek } from "./floor";
 import { withSeason } from "./seasons";
-import { DEFAULT_SETTINGS, type Session, type Settings, type Trial } from "./types";
+import { DEFAULT_SETTINGS, type Draw, type Session, type Settings, type Trial } from "./types";
 
 const START = "2026-10-01";
 const trial: Trial = {
@@ -139,13 +139,14 @@ describe("weekPill", () => {
 describe("floorStrip", () => {
   it("counts this trial's sessions per week", () => {
     const sessions = [s(1, "a"), s(2, "a"), s(3, "a"), s(8, "a"), s(8, "b"), s(9, "a", "other")];
-    const strip = floorStrip({ trial, sessions, settings: settings(), today: day(9), experiment: A });
+    const strip = floorStrip({ trial, draws: [], sessions, settings: settings(), today: day(9), experiment: A });
     expect(strip.map((p) => p.label)).toEqual(["Cleared +1", "1 of 2", ""]);
   });
 
   it("shows n done in newborn season", () => {
     const strip = floorStrip({
       trial,
+      draws: [],
       sessions: [s(1, "a")],
       settings: settings({ season: "newborn" }),
       today: day(2),
@@ -157,7 +158,7 @@ describe("floorStrip", () => {
 
 describe("clearedWeek", () => {
   it("needs a floor above 0", () => {
-    const input = { trial, sessions: [s(1, "a")], today: day(9), experiment: A, week: wk(1) };
+    const input = { trial, draws: [], sessions: [s(1, "a")], today: day(9), experiment: A, week: wk(1) };
     expect(clearedWeek({ ...input, settings: settings() })).toBe(false);
     expect(clearedWeek({ ...input, settings: settings({ season: "travel" }) })).toBe(true);
     expect(clearedWeek({ ...input, settings: settings({ season: "newborn" }) })).toBe(false);
@@ -169,17 +170,17 @@ describe("streakWeeks", () => {
 
   it("counts consecutive completed weeks where every experiment cleared", () => {
     const sessions = both([1, 2, 8, 9]);
-    expect(streakWeeks({ trial, sessions, settings: settings(), today: day(15), experiments: [A, B] })).toBe(2);
+    expect(streakWeeks({ trial, draws: [], sessions, settings: settings(), today: day(15), experiments: [A, B] })).toBe(2);
   });
 
   it("does not count the week in progress", () => {
     const sessions = both([1, 2, 8, 9, 15, 16]);
-    expect(streakWeeks({ trial, sessions, settings: settings(), today: day(17), experiments: [A, B] })).toBe(2);
+    expect(streakWeeks({ trial, draws: [], sessions, settings: settings(), today: day(17), experiments: [A, B] })).toBe(2);
   });
 
   it("stops at the most recent week that did not clear", () => {
     const sessions = [...both([1, 2, 15, 16]), s(8, "a"), s(9, "a")];
-    expect(streakWeeks({ trial, sessions, settings: settings(), today: day(22), experiments: [A, B] })).toBe(1);
+    expect(streakWeeks({ trial, draws: [], sessions, settings: settings(), today: day(22), experiments: [A, B] })).toBe(1);
   });
 
   it("treats newborn weeks as neutral", () => {
@@ -187,10 +188,69 @@ describe("streakWeeks", () => {
     let st = withSeason(settings(), "newborn", day(8));
     st = withSeason(st, "normal", day(15));
     const sessions = both([1, 2, 15, 16]);
-    expect(streakWeeks({ trial, sessions, settings: st, today: day(22), experiments: [A, B] })).toBe(2);
+    expect(streakWeeks({ trial, draws: [], sessions, settings: st, today: day(22), experiments: [A, B] })).toBe(2);
   });
 
   it("is 0 with no completed weeks", () => {
-    expect(streakWeeks({ trial, sessions: both([1, 2]), settings: settings(), today: day(5), experiments: [A, B] })).toBe(0);
+    expect(streakWeeks({ trial, draws: [], sessions: both([1, 2]), settings: settings(), today: day(5), experiments: [A, B] })).toBe(0);
+  });
+});
+
+describe("roster by week", () => {
+  const C = { id: "c", portable: true };
+  /** One draw per day, its weights keyed by the experiments in the trial that day. */
+  const draws = (days: number[], ids: string[]): Draw[] =>
+    days.map((d) => ({
+      id: `d${d}`,
+      trialId: "t1",
+      date: day(d),
+      experimentId: ids[0] ?? "a",
+      weights: Object.fromEntries(ids.map((id) => [id, 1])),
+    }));
+  const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
+  const cleared = (ids: string[], days: number[]) => ids.flatMap((id) => days.map((d) => s(d, id)));
+
+  // c joins on day 10, partway through week 2.
+  const added: Trial = { ...trial, experimentIds: ["a", "b", "c"] };
+  const addedDraws = [...draws(range(1, 9), ["a", "b"]), ...draws(range(10, 14), ["a", "b", "c"])];
+
+  it("reads a week's roster from its draws, falling back to the trial when a week has none", () => {
+    expect([...weekRoster(added, addedDraws, wk(1, day(15)), day(15))].sort()).toEqual(["a", "b"]);
+    expect([...weekRoster(added, addedDraws, wk(2, day(15)), day(15))].sort()).toEqual(["a", "b", "c"]);
+    expect([...weekRoster(added, [], wk(1, day(15)), day(15))].sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("keeps week 1 neutral for an experiment added in week 2", () => {
+    const sessions = [...cleared(["a", "b"], [1, 2, 8, 9]), ...cleared(["c"], [10, 11])];
+    const input = { trial: added, sessions, settings: settings(), today: day(15) };
+    expect(streakWeeks({ ...input, draws: addedDraws, experiments: [A, B, C] })).toBe(2);
+    // Judged against today's roster instead, c's empty week 1 would end the streak there.
+    expect(streakWeeks({ ...input, draws: [], experiments: [A, B, C] })).toBe(1);
+
+    const strip = floorStrip({ ...input, draws: addedDraws, experiment: C });
+    expect(strip[0]).toMatchObject({ kind: "absent", label: "", description: "Week 1, not in the trial yet" });
+    expect(strip[1]).toMatchObject({ kind: "cleared" });
+    expect(clearedWeek({ ...input, draws: addedDraws, experiment: C, week: wk(1, day(15)) })).toBe(false);
+  });
+
+  it("still judges a removed experiment's past weeks by the roster they had", () => {
+    // c leaves after week 1. Week 1 still needs it; week 2 does not.
+    const removedDraws = [...draws(range(1, 7), ["a", "b", "c"]), ...draws(range(8, 14), ["a", "b"])];
+    const base = cleared(["a", "b"], [1, 2, 8, 9]);
+    const input = { trial, draws: removedDraws, settings: settings(), today: day(15), experiments: [A, B, C] };
+    expect(streakWeeks({ ...input, sessions: [...base, ...cleared(["c"], [1, 2])] })).toBe(2);
+    expect(streakWeeks({ ...input, sessions: [...base, s(1, "c")] })).toBe(1);
+  });
+
+  it("counts the week in progress for an experiment added after today's draw", () => {
+    const strip = floorStrip({
+      trial: added,
+      draws: draws(range(1, 10), ["a", "b"]),
+      sessions: [],
+      settings: settings(),
+      today: day(10),
+      experiment: C,
+    });
+    expect(strip.map((p) => p.kind)).toEqual(["absent", "progress", "future"]);
   });
 });

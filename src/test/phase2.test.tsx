@@ -158,6 +158,37 @@ describe("Phase 2: floor and streaks", () => {
     const bonus = screen.getAllByRole("listitem", { name: "Week 1, cleared with 1 bonus session" });
     expect(bonus).toHaveLength(1);
   });
+
+  it("floor pills and day cells show their details on keyboard focus", async () => {
+    setToday(2026, 10, 8);
+    setRandom(0);
+    let app = await onboard([WORLD, TUNE]);
+    await addSessions([WORLD], [1, 2, 3]);
+    app.unmount();
+
+    setToday(2026, 10, 15);
+    app = renderApp();
+    await screen.findByRole("heading", { level: 1, name: "Day 8 of 21" });
+    await openTab(app.user, "Trial");
+
+    // Each is focusable and shows a positioned tooltip, not a title attribute.
+    const [pill] = screen.getAllByRole("listitem", { name: "Week 1, cleared with 1 bonus session" });
+    if (!pill) throw new Error("No bonus pill");
+    expect(pill).toHaveAttribute("tabindex", "0");
+    expect(pill).not.toHaveAttribute("title");
+    fireEvent.focus(pill);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Week 1, cleared with 1 bonus session");
+    expect(pill).toHaveAttribute("aria-describedby", screen.getByRole("tooltip").id);
+    fireEvent.blur(pill);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    const day1 = screen.getByRole("listitem", { name: /^Day 1, / });
+    expect(day1).toHaveAttribute("tabindex", "0");
+    expect(day1).not.toHaveAttribute("title");
+    fireEvent.focus(day1);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(`drew ${WORLD}, 1 session`);
+    expect(screen.getByRole("tooltip").textContent).toBe(day1.getAttribute("aria-label"));
+  });
 });
 
 describe("Phase 2: verdict flow", () => {

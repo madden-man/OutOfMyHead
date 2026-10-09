@@ -113,3 +113,50 @@ describe("formatters", () => {
     expect(formatRate(0.666)).toBe("67%");
   });
 });
+
+describe("floor weeks cleared by roster", () => {
+  const C = { id: "c", portable: true };
+  const weighted = (d: number, ids: string[]): Draw => ({
+    id: `w${d}`,
+    trialId: "t1",
+    date: day(d),
+    experimentId: ids[0] ?? "a",
+    weights: Object.fromEntries(ids.map((id) => [id, 1])),
+  });
+
+  it("keeps a removed experiment's past weeks in its history", () => {
+    // c is in week 1, cleared it, then left the trial before week 2.
+    const history = [
+      ...[1, 2, 3, 4, 5, 6, 7].map((d) => weighted(d, ["a", "b", "c"])),
+      ...[8, 9, 10, 11, 12, 13, 14].map((d) => weighted(d, ["a", "b"])),
+    ];
+    const cSessions = [s(1, "c", 4, true), s(2, "c", 3, false)];
+    const stats = experimentStats({
+      trial,
+      sessions: cSessions,
+      draws: history,
+      settings: DEFAULT_SETTINGS,
+      today: day(15),
+      experiment: C,
+    });
+    expect(stats.floorWeeksCleared).toBe(1);
+  });
+
+  it("does not count weeks before an experiment joined", () => {
+    // c joins in week 2. Sessions logged before then do not clear week 1 for it.
+    const history = [
+      ...[1, 2, 3, 4, 5, 6, 7].map((d) => weighted(d, ["a", "b"])),
+      ...[8, 9, 10, 11, 12, 13, 14].map((d) => weighted(d, ["a", "b", "c"])),
+    ];
+    const cSessions = [s(1, "c", 4, true), s(2, "c", 3, false), s(8, "c", 3, false), s(9, "c", 3, false)];
+    const stats = experimentStats({
+      trial: { ...trial, experimentIds: ["a", "b", "c"] },
+      sessions: cSessions,
+      draws: history,
+      settings: DEFAULT_SETTINGS,
+      today: day(15),
+      experiment: C,
+    });
+    expect(stats.floorWeeksCleared).toBe(1);
+  });
+});
